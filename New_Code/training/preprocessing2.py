@@ -1,31 +1,33 @@
 import os
-import json
 import torch
 import cv2
 import kornia as K
 import numpy as np
 from torch.utils.data import Dataset as BaseDataset
 from scipy import stats
+import json
 
 # Load preprocessing config
-with open('preprocessing_config.json') as f:
+with open('New_Code/configs/preprocessing_config.json') as f:
     preprocessing_config = json.load(f)
 
 DEVICE = torch.device(preprocessing_config["device"])
 
 class Dataset(BaseDataset):
-    def __init__(self, dir_path, split="train", augmentation=None, preprocessing=True):
-        self.image_ids = sorted(os.listdir(os.path.join(dir_path, split, "images")))
-        self.mask_ids = sorted(os.listdir(os.path.join(dir_path, split, "masks")))
+    def __init__(self, dir_path, image_ids, mask_ids, augmentation=None, preprocessing=True):
+        self.image_ids = image_ids
+        self.mask_ids = mask_ids
         self.dir_path = dir_path
-        self.split = split
         self.augmentation = augmentation
         self.preprocessing = preprocessing
 
     def __getitem__(self, ind):
         # Load image and mask
-        image = cv2.imread(os.path.join(self.dir_path, self.split, "images", self.image_ids[ind]), cv2.IMREAD_COLOR)
-        mask = cv2.imread(os.path.join(self.dir_path, self.split, "masks", self.mask_ids[ind]), cv2.IMREAD_GRAYSCALE)
+        image_path = os.path.join(self.dir_path, "Images_640_1280", self.image_ids[ind])
+        mask_path = os.path.join(self.dir_path, "Masks_640_1280", self.mask_ids[ind])
+        
+        image = cv2.imread(image_path, cv2.IMREAD_COLOR)
+        mask = cv2.imread(mask_path, cv2.IMREAD_GRAYSCALE)
         
         # Convert mask values to classes
         mask_class = mask // 15  # Assuming mask values are wound_class * 15

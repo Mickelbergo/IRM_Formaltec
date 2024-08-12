@@ -1,9 +1,5 @@
-1. look over augmentation, epochs, loss, metrics and then change their directory to training or configs (or utils)
-2. then change the paths in main file
+1. look at epoch2, train2 and preprocessing2 (fix dimensions)
 
-3. define a new model (e.g. vision transformer)
+2. look if mask classes are calcualted correctly
 
-4. create virtual environment
-
-
-5. 
+3. start trainign different models

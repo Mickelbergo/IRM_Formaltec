@@ -2,53 +2,76 @@ import os
 import json
 import torch
 import torch.nn as nn
+import random
 from torch.utils.data import DataLoader
 import segmentation_models_pytorch as smp
 import matplotlib.pyplot as plt
-from preprocessing import Dataset
-from epochs import TrainEpoch, ValidEpoch
+from preprocessing2 import Dataset
+from epochs2 import TrainEpoch, ValidEpoch
+import sys
 
 # Load configurations
-with open('training_config.json') as f:
-    config = json.load(f)
+with open('New_Code/configs/training_config.json') as f:
+    train_config = json.load(f)
+
+with open('New_Code/configs/preprocessing_config.json') as f:
+    preprocessing_config = json.load(f)
 
 # Device configuration
-DEVICE = torch.device(config["device"])
+DEVICE = torch.device(train_config["device"])
 
 # Set paths
-path = config["path"]
-model_version = config["model_version"]
+path = train_config["path"]
+model_version = train_config["model_version"]
 
-# Load datasets
+# Load all image and mask paths
+image_dir = os.path.join(path, "Images_640_1280")
+mask_dir = os.path.join(path, "Masks_640_1280")
+
+image_ids = sorted(os.listdir(image_dir))
+
+# Shuffle and split the dataset into training and validation sets
+random.seed(42)  # For reproducibility
+random.shuffle(image_ids)
+
+split_ratio = 0.8  # 80% training, 20% validation
+split_index = int(len(image_ids) * split_ratio)
+
+train_ids = image_ids[:split_index]
+valid_ids = image_ids[split_index:]
+
+# Create dataset instances
 train_dataset = Dataset(
     dir_path=path,
-    split="train",
-    augmentation=config["augmentation"],
+    image_ids=train_ids,
+    mask_ids=train_ids,  # Assuming mask names match image names
+    augmentation=preprocessing_config["augmentation"],
     preprocessing=True
 )
 
 valid_dataset = Dataset(
     dir_path=path,
-    split="val",
+    image_ids=valid_ids,
+    mask_ids=valid_ids,  # Assuming mask names match image names
     augmentation=None,
     preprocessing=True
 )
 
-train_loader = DataLoader(train_dataset, batch_size=config["batch_size"], shuffle=True)
-valid_loader = DataLoader(valid_dataset, batch_size=config["batch_size"], shuffle=False)
+train_loader = DataLoader(train_dataset, batch_size=train_config["batch_size"], shuffle=True)
+valid_loader = DataLoader(valid_dataset, batch_size=train_config["batch_size"], shuffle=False)
 
 # Define model
 model = smp.Unet(
-    encoder_name=config["encoder"],
-    encoder_weights=config["encoder_weights"],
+    encoder_name=train_config["encoder"],
+    encoder_weights=train_config["encoder_weights"],
     classes=2,  # Segmentation classes (e.g., wound vs. background)
-    activation=config["activation"]
+    activation=train_config["activation"]
 )
 model = model.to(DEVICE)
 
 # Define optimizer, loss, and scheduler
-optimizer = torch.optim.Adam(model.parameters(), lr=config["optimizer_lr"])
-scheduler = torch.optim.lr_scheduler.ExponentialLR(optimizer, gamma=config["lr_scheduler_gamma"])
+optimizer = torch.optim.Adam(model.parameters(), lr=train_config["optimizer_lr"])
+scheduler = torch.optim.lr_scheduler.ExponentialLR(optimizer, gamma=train_config["lr_scheduler_gamma"])
 segmentation_loss_fn = nn.CrossEntropyLoss()  # Segmentation loss
 classification_loss_fn = nn.CrossEntropyLoss()  # Classification loss
 
@@ -58,8 +81,8 @@ valid_epoch = ValidEpoch(model, segmentation_loss_fn, classification_loss_fn, de
 
 # Training loop
 max_score = 0
-for epoch in range(config["num_epochs"]):
-    print(f"Epoch {epoch + 1}/{config['num_epochs']}")
+for epoch in range(train_config["num_epochs"]):
+    print(f"Epoch {epoch + 1}/{train_config['num_epochs']}")
     
     # Train model
     train_logs = train_epoch.run(train_loader)
