@@ -74,6 +74,8 @@ class Dataset(BaseDataset):
             
         if self.preprocessing:
 
+
+            #standardize images
             image = image / 255.0
             
             image[0] -= self.mean[0]

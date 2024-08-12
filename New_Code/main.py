@@ -13,7 +13,6 @@ from epochs import TrainEpoch, ValidEpoch, TrainEpoch_imlarge, ValidEpoch_imlarg
 from config import config
 # from select_model import MODEL
 import subprocess
-
 import pandas as pd
 import numpy as np
 import cv2
@@ -327,4 +326,5 @@ for fold, (train_index, val_index) in enumerate(kf.split(names)):
     
         
     torch.save(model, os.path.join(path, "runs", "paper", model_version + now, model_version + "_last_epoch_model_fold_" + str(fold) + ".pth"))
+
 

@@ -28,13 +28,11 @@ import seaborn as sns
 from sklearn.metrics import confusion_matrix
 from sklearn.model_selection import KFold
 import segmentation_models_pytorch as smp
-import torch
-import torch.nn as nn
-from torch.utils.data import DataLoader                                                                                                                                                                                                                                                                                                                                             
-from torch.utils.data import Dataset as BaseDataset
 import torch.nn.functional as F                                                                                                                                                                                               
 import shutil
 import time
+import argparse
+
 
 
 # import necessary files
@@ -42,8 +40,8 @@ from configs import config
 from loss import custom_weighted_BCE, sqrt_custom_weighted_BCE, weighted_BCE, sqrt_weighted_BCE, weighted_FTL, weighted_FTL_BCE
 from preprocessing import Dataset
 from metrics import image_acc_metric, class_acc_metric
-from augmentation import training_augmentation, training_augmentation_imlarge, valid_augmentation_imlarge #, valid_augmentation
-from epochs import TrainEpoch, ValidEpoch, TrainEpoch_imlarge, ValidEpoch_imlarge
+from augmentation import training_augmentation
+from epochs import TrainEpoch, ValidEpoch
 
 
 
@@ -313,3 +311,8 @@ for fold, (train_index, val_index) in enumerate(kf.split(names)):
         
     torch.save(model, os.path.join(path, "runs", "paper", model_version + now, model_version + "_last_epoch_model_fold_" + str(fold) + ".pth"))
 
+
+
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description = "Training_script")
+    parser.add_argument
