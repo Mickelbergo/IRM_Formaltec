@@ -1,0 +1,9 @@
+1. look over augmentation, epochs, loss, metrics and then change their directory to training or configs (or utils)
+2. then change the paths in main file
+
+3. define a new model (e.g. vision transformer)
+
+4. create virtual environment
+
+
+5. 

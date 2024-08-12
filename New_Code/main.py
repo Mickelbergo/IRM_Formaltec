@@ -1,28 +1,26 @@
+'''
+Code used to train all models described on the paper "Segmentation and classification of seven common wounds in forensic medicine". 
+The aim is to segment and classify wounds on 2D images taken during the forensic medical exams of injured persons.
+'''
 
+# import necessary libraries
 
-
-
-#import necessary libraries
-import sys
-import os
-# Get the root directory (one level up from the current file's directory)
-root_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
-sys.path.append(root_dir)
-
-
-import torch
-import torch.nn as nn
-from torch.utils.data import DataLoader
-from torch.utils.data import Dataset as BaseDataset
-import torch.nn.functional as F
-import cv2
-import kornia as K
-import numpy as np
-import matplotlib.pyplot as plt
+from loss import custom_weighted_BCE, sqrt_custom_weighted_BCE, weighted_BCE, sqrt_weighted_BCE, weighted_FTL, weighted_FTL_BCE
+from dataloader_and_preprocessing import Dataset, Dataset_imlarge
+from metrics import image_acc_metric, class_acc_metric
+from augmentation import training_augmentation, training_augmentation_imlarge, valid_augmentation_imlarge #, valid_augmentation
+from epochs import TrainEpoch, ValidEpoch, TrainEpoch_imlarge, ValidEpoch_imlarge
+from config import config
+# from select_model import MODEL
 import subprocess
+
 import pandas as pd
 import numpy as np
+import cv2
+import matplotlib.pyplot as plt
 from tqdm import tqdm as tqdm
+import sys
+import os
 import json
 import seaborn as sns
 from sklearn.metrics import confusion_matrix
@@ -32,22 +30,10 @@ import torch
 import torch.nn as nn
 from torch.utils.data import DataLoader                                                                                                                                                                                                                                                                                                                                             
 from torch.utils.data import Dataset as BaseDataset
-import torch.nn.functional as F                                                                                                                                                                                               
+import torch.nn.functional as F
+import kornia as K                                                                                                                                                                                                
 import shutil
 import time
-
-
-# import necessary files
-from configs import config
-from loss import custom_weighted_BCE, sqrt_custom_weighted_BCE, weighted_BCE, sqrt_weighted_BCE, weighted_FTL, weighted_FTL_BCE
-from preprocessing import Dataset
-from metrics import image_acc_metric, class_acc_metric
-from augmentation import training_augmentation, training_augmentation_imlarge, valid_augmentation_imlarge #, valid_augmentation
-from epochs import TrainEpoch, ValidEpoch, TrainEpoch_imlarge, ValidEpoch_imlarge
-
-
-
-
 
 # Train on GPU if available / otherwise train on CPU
 
@@ -64,7 +50,7 @@ ENCODER_WEIGHTS = config.ENCODER_WEIGHTS
 ACTIVATION = config.ACTIVATION
 BATCHSIZE = config.BATCHSIZE
 
-source_folder = r"E:\ForMaLTeC\\Wound_segmentation_III\\GIT\\IRM_Formaltec\\New_Code"
+source_folder = r"E:\ForMaLTeC\Tools\Wound_segmentation\Code\Wound_segmentation_main"
 destination_folder = os.path.join(path, "runs", "paper", model_version + now, "code_and_files")
 
 # Load all annotation data (VGG Image Annotator format)
@@ -73,25 +59,30 @@ with open(os.path.join(path, "Annotations/annotation.json")) as json_file:
 
 # Get names of images
 names = list(data["_via_img_metadata"].keys())
-print(len(names))
-
-
+    
 # Wound_classes without "Stich/Schnitt-Kombination" 
 wound_classes = config.wound_classes
 print(wound_classes)
     
+# Load image names from the test dataset
+with open(os.path.join(path, "Text_files/test.txt"), "r") as filehandle:
+    test = json.load(filehandle)
+    
+#%%
 
 if not os.path.exists(destination_folder):
     os.makedirs(destination_folder)
     
-# conda_file = os.path.join(destination_folder, "environment.yaml")
-# # save a copy to the results folder for reproducebility
-# command = f"conda env export -n WoundSeg -f {conda_file}"
-# result = subprocess.run(command, stderr=subprocess.PIPE)
+conda_file = os.path.join(destination_folder, "environment.yaml")
+# save a copy to the results folder for reproducebility
+command = f"conda env export -n WoundSeg -f {conda_file}"
+result = subprocess.run(command, stderr=subprocess.PIPE)
     
 with open(os.path.join(destination_folder, "annotation.json"), "w") as json_file:
     json.dump(data, json_file)
 
+with open(os.path.join(destination_folder, "test.txt"), "w") as json_file:
+    json.dump(test, json_file)
 
 file_list = os.listdir(source_folder)
 
@@ -104,7 +95,10 @@ for file in python_files:
     
     shutil.copy(source_file, \
                 destination_folder)
-
+        
+#%%  
+# remove test from train and val images
+names = [x for x in names if x not in test]
 
 # split data for training and validation and seven folds
 kf = KFold(n_splits = 7, shuffle = True, random_state = 42)
@@ -112,6 +106,7 @@ for ti, vi in kf.split(names):
     print(len(ti), len(vi))
 
 print("Number of images in train and validation: ", len(names))
+print("Number of images in test dataset: ", len(test))
 print("Wound classes: " , wound_classes)
 
 Loss_functions = [custom_weighted_BCE, sqrt_custom_weighted_BCE, weighted_BCE, 
@@ -123,12 +118,12 @@ for loss_function in Loss_functions: # not super elegant------------------------
         break
 
 # test dataset without transformations
-# test_dataset = Dataset(
-#     test,
-#     dir_path = path,
-#     augmentation=False,
-#     preprocessing=True,
-# )
+test_dataset = Dataset(
+    test,
+    dir_path = path,
+    augmentation=False,
+    preprocessing=True,
+)
 
 # run the training for seven folds
 for fold, (train_index, val_index) in enumerate(kf.split(names)):
@@ -154,52 +149,72 @@ for fold, (train_index, val_index) in enumerate(kf.split(names)):
     train = [names[i] for i in train_index]
     valid = [names[i] for i in val_index]
     
-    train_epoch = TrainEpoch(
-        model,
-        loss=loss,
-        # metrics=config.metrics,
-        optimizer=optimizer,
-        device=DEVICE,
-        verbose=True,
-    )
+    # large images need to be loaded, so that we need another training pipeline
+    if ENCODER == "hd_model": 
+        train_epoch = TrainEpoch_imlarge(
+            model,
+            loss=loss,
+            metrics=config.metrics,
+            optimizer=optimizer,
+            device=DEVICE,
+            verbose=True,
+        )
+        
+        valid_epoch = ValidEpoch_imlarge(
+            model,
+            loss=loss,
+            metrics=config.metrics,
+            device=DEVICE,
+            verbose=True,
+        )
+        train_dataset = Dataset_imlarge(
+            train[:],
+            dir_path = path,
+            augmentation=training_augmentation_imlarge(),
+            preprocessing=True,
+        )
+        
+        valid_dataset = Dataset_imlarge(
+            valid[:],
+            dir_path = path,
+            augmentation=valid_augmentation_imlarge(),
+            preprocessing=True,
+        )
     
-    valid_epoch = ValidEpoch(
-        model,
-        loss=loss,
-        # metrics=config.metrics,
-        device=DEVICE,
-        verbose=True,
-    )
+
+    else:
+        train_epoch = TrainEpoch(
+            model,
+            loss=loss,
+            # metrics=config.metrics,
+            optimizer=optimizer,
+            device=DEVICE,
+            verbose=True,
+        )
+        
+        valid_epoch = ValidEpoch(
+            model,
+            loss=loss,
+            # metrics=config.metrics,
+            device=DEVICE,
+            verbose=True,
+        )
+        
+        train_dataset = Dataset(
+            train[:], # + valid[:],
+            dir_path = path,
+            augmentation=training_augmentation(),
+            preprocessing=True,
+        )
+        
+        valid_dataset = Dataset(
+            valid[:],
+            dir_path = path,
+            augmentation=False,
+            preprocessing=True,
+        )
     
-    train_dataset = Dataset(
-        train[:], # + valid[:],
-        dir_path = path,
-        augmentation=training_augmentation(),
-        preprocessing=True,
-    )
     
-    valid_dataset = Dataset(
-        valid[:],
-        dir_path = path,
-        augmentation=False,
-        preprocessing=True,
-    )
-    
-    # Display an image from the training dataset
-    image, target_bce = train_dataset[0]  # Load the first image from the dataset
-
-    # Convert the image tensor back to a NumPy array and move it to CPU if necessary
-    image_np = image.cpu().numpy()
-
-    # The image tensor will be in (C, H, W) format; convert it to (H, W, C) for display
-    image_np = image_np.transpose(1, 2, 0)
-
-  
-    # Display the image using matplotlib
-    plt.imshow(image_np.astype(np.uint8))
-    plt.title("Sample Image from Dataset")
-    plt.show()
-
     train_loader = DataLoader(train_dataset, batch_size=BATCHSIZE, shuffle=True) #, num_workers=4) 
     valid_loader = DataLoader(valid_dataset, batch_size=1, shuffle=False) #, num_workers=4)
 
