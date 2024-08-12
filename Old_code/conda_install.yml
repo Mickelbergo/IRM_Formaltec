@@ -1,0 +1,7 @@
+channels:
+  - conda-forge
+  - anaconda
+dependencies:
+  - segmentation-models-pytorch
+  - seaborn
+  - opencv
