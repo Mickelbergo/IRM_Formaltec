@@ -1,5 +1,9 @@
-1. look at epoch2, train2 and preprocessing2 (fix dimensions)
+1. The preprocessing 2 steps with calculating the classes seems flawed.
+Particularly, i get an out of bounds error when calculating the cross entropy loss (already in the segmentation step)
 
-2. look if mask classes are calcualted correctly
+switch to cpu for more meaningful error messages
 
-3. start trainign different models
+
+
+the mask input to the segmentation loss function shouold only have values 0 for background and 1 for foreground
+look at preprocessing2 

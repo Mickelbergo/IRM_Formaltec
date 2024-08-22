@@ -6,6 +6,7 @@ import numpy as np
 from torch.utils.data import Dataset as BaseDataset
 from scipy import stats
 from augmentations import resize_and_pad  # Import the resize_and_pad function
+import json
 
 # Load preprocessing config
 with open('New_Code/configs/preprocessing_config.json') as f:
@@ -23,9 +24,20 @@ class Dataset(BaseDataset):
         self.target_size = target_size
 
     def __getitem__(self, ind):
+        #############################TODO#######################
+
+        #CONVERT MASK TO BINARY MASK
+
+        ######################## RETURN THE MASK????????
+        #########################################################
+
+
+
+
+        
         # Load image and mask
-        image_path = os.path.join(self.dir_path, "images", self.image_ids[ind])
-        mask_path = os.path.join(self.dir_path, "masks", self.mask_ids[ind])
+        image_path = os.path.join(self.dir_path, "images_640_1280", self.image_ids[ind])
+        mask_path = os.path.join(self.dir_path, "masks_640_1280", self.mask_ids[ind])
         
         image = cv2.imread(image_path, cv2.IMREAD_COLOR)
         mask = cv2.imread(mask_path, cv2.IMREAD_GRAYSCALE)
@@ -34,11 +46,22 @@ class Dataset(BaseDataset):
         image, mask = resize_and_pad(image, mask, self.target_size)
         
         # Convert mask values to classes
-        mask_class = mask // 15  # Assuming mask values are wound_class * 15
+        mask_class = (mask // 15) # Assuming mask values are wound_class * 15
         
-        # Determine the dominant class in the mask (for classification)
-        dominant_class = int(stats.mode(mask_class.flatten())[0])
+        # Filter out background (class 0) and get non-background classes
+        non_background_pixels = mask_class[mask_class != 0]
         
+        if len(non_background_pixels) > 0:
+            # Determine the most frequent non-background class in the mask
+            dominant_class = int(stats.mode(non_background_pixels.flatten())[0])
+        else:
+            # Handle edge case where the mask is entirely background
+            dominant_class = 0  # or consider ignoring this image in training
+
+        dominant_class -= 1 ################## this may very well be wrong
+
+
+        print(dominant_class)
         # Convert to tensor
         image = K.image_to_tensor(image).float().to(DEVICE)
         mask_class = K.image_to_tensor(mask_class).long().to(DEVICE)

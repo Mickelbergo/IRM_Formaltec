@@ -1,15 +1,17 @@
 {
-    "device": "cuda",
+    "device": "cpu",
     "path": "E:/ForMaLTeC/Wound_segmentation_III/Data",
     "model_version": "v1.0",
     "encoder": "resnet34",
     "encoder_weights": "imagenet",
-    "activation": "softmax",
+    "activation": "sigmoid",
     "batch_size": 16,
     "num_epochs": 150,
     "optimizer_lr": 0.001,
     "optimizer": "adam",
     "lr_scheduler_gamma": 0.9,
     "loss": "cross_entropy",
-    "metrics": ["accuracy", "iou_score"]
+    "metrics": ["accuracy", "iou_score"],
+    "segmentation_classes": 2,
+    "classification_classes": 15
 }

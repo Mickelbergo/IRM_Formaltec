@@ -9,6 +9,7 @@ import segmentation_models_pytorch as smp
 import matplotlib.pyplot as plt
 from preprocessing2 import Dataset
 from epochs2 import TrainEpoch, ValidEpoch
+from model import UNetWithClassification
 
 # Load configurations
 with open('New_Code/configs/training_config.json') as f:
@@ -25,8 +26,8 @@ path = train_config["path"]
 model_version = train_config["model_version"]
 
 # Load all image and mask paths
-image_dir = os.path.join(path, "images")
-mask_dir = os.path.join(path, "masks")
+image_dir = os.path.join(path, "images_640_1280")
+mask_dir = os.path.join(path, "masks_640_1280")
 
 image_ids = sorted(os.listdir(image_dir))
 
@@ -47,7 +48,7 @@ train_dataset = Dataset(
     mask_ids=train_ids,  # Assuming mask names match image names
     augmentation=preprocessing_config["augmentation"],
     preprocessing=True,
-    target_size=(640, 640)  # You can adjust this size as needed
+    target_size=(640, 640)  # adjust this size
 )
 
 valid_dataset = Dataset(
@@ -63,10 +64,11 @@ train_loader = DataLoader(train_dataset, batch_size=train_config["batch_size"], 
 valid_loader = DataLoader(valid_dataset, batch_size=train_config["batch_size"], shuffle=False)
 
 # Define model
-model = smp.Unet(
+model = UNetWithClassification(
     encoder_name=train_config["encoder"],
     encoder_weights=train_config["encoder_weights"],
-    classes=2,  # Segmentation classes (e.g., wound vs. background)
+    classes= train_config["segmentation_classes"],  # Segmentation classes (e.g., wound vs. background)
+    num_classes=train_config["classification_classes"],  # Replace with the actual number of wound classes
     activation=train_config["activation"]
 )
 model = model.to(DEVICE)

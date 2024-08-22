@@ -42,4 +42,4 @@ def resize_and_pad(image, mask, target_size=(640, 640)):
     
     return padded_image, padded_mask
 
-# You can add more augmentation functions below as needed.
+#add more augmentation functions below as needed.
