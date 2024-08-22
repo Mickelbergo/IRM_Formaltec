@@ -1,14 +1,14 @@
 import os
-import json
 import torch
-import torch.nn as nn
 import random
+import json
+import torch.nn as nn
+
 from torch.utils.data import DataLoader
 import segmentation_models_pytorch as smp
 import matplotlib.pyplot as plt
 from preprocessing2 import Dataset
 from epochs2 import TrainEpoch, ValidEpoch
-import sys
 
 # Load configurations
 with open('New_Code/configs/training_config.json') as f:
@@ -25,8 +25,8 @@ path = train_config["path"]
 model_version = train_config["model_version"]
 
 # Load all image and mask paths
-image_dir = os.path.join(path, "Images_640_1280")
-mask_dir = os.path.join(path, "Masks_640_1280")
+image_dir = os.path.join(path, "images")
+mask_dir = os.path.join(path, "masks")
 
 image_ids = sorted(os.listdir(image_dir))
 
@@ -46,7 +46,8 @@ train_dataset = Dataset(
     image_ids=train_ids,
     mask_ids=train_ids,  # Assuming mask names match image names
     augmentation=preprocessing_config["augmentation"],
-    preprocessing=True
+    preprocessing=True,
+    target_size=(640, 640)  # You can adjust this size as needed
 )
 
 valid_dataset = Dataset(
@@ -54,7 +55,8 @@ valid_dataset = Dataset(
     image_ids=valid_ids,
     mask_ids=valid_ids,  # Assuming mask names match image names
     augmentation=None,
-    preprocessing=True
+    preprocessing=True,
+    target_size=(640, 640)  # Ensure it's the same size as for training
 )
 
 train_loader = DataLoader(train_dataset, batch_size=train_config["batch_size"], shuffle=True)

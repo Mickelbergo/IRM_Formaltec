@@ -35,7 +35,7 @@ class Epoch:
         with tqdm(dataloader, desc=self.stage_name, file=sys.stdout, disable=not self.verbose) as iterator:
             for x, mask, mask_class in iterator:
                 x, mask, mask_class = x.to(self.device), mask.to(self.device), mask_class.to(self.device)
-                
+                #print(f'image shape : {x.shape}, mask shape: {mask.shape}')
                 loss, y_pred, class_pred = self.batch_update(x, mask, mask_class)
 
                 losses.append(loss.item())

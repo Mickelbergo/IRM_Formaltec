@@ -5,7 +5,7 @@ import kornia as K
 import numpy as np
 from torch.utils.data import Dataset as BaseDataset
 from scipy import stats
-import json
+from augmentations import resize_and_pad  # Import the resize_and_pad function
 
 # Load preprocessing config
 with open('New_Code/configs/preprocessing_config.json') as f:
@@ -14,20 +14,24 @@ with open('New_Code/configs/preprocessing_config.json') as f:
 DEVICE = torch.device(preprocessing_config["device"])
 
 class Dataset(BaseDataset):
-    def __init__(self, dir_path, image_ids, mask_ids, augmentation=None, preprocessing=True):
+    def __init__(self, dir_path, image_ids, mask_ids, augmentation=None, preprocessing=True, target_size=(640, 640)):
         self.image_ids = image_ids
         self.mask_ids = mask_ids
         self.dir_path = dir_path
         self.augmentation = augmentation
         self.preprocessing = preprocessing
+        self.target_size = target_size
 
     def __getitem__(self, ind):
         # Load image and mask
-        image_path = os.path.join(self.dir_path, "Images_640_1280", self.image_ids[ind])
-        mask_path = os.path.join(self.dir_path, "Masks_640_1280", self.mask_ids[ind])
+        image_path = os.path.join(self.dir_path, "images", self.image_ids[ind])
+        mask_path = os.path.join(self.dir_path, "masks", self.mask_ids[ind])
         
         image = cv2.imread(image_path, cv2.IMREAD_COLOR)
         mask = cv2.imread(mask_path, cv2.IMREAD_GRAYSCALE)
+        
+        # Apply resizing and padding
+        image, mask = resize_and_pad(image, mask, self.target_size)
         
         # Convert mask values to classes
         mask_class = mask // 15  # Assuming mask values are wound_class * 15
