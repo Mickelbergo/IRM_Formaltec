@@ -1,5 +1,5 @@
 {
-    "device": "cpu",
+    "device": "cuda",
     "path": "E:/ForMaLTeC/Wound_segmentation_III/Data",
     "model_version": "v1.0",
     "encoder": "resnet34",

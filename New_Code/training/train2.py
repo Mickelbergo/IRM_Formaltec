@@ -60,8 +60,8 @@ valid_dataset = Dataset(
     target_size=(640, 640)  # Ensure it's the same size as for training
 )
 
-train_loader = DataLoader(train_dataset, batch_size=train_config["batch_size"], shuffle=True)
-valid_loader = DataLoader(valid_dataset, batch_size=train_config["batch_size"], shuffle=False)
+train_loader = DataLoader([item for item in train_dataset if item is not None], batch_size=train_config["batch_size"], shuffle=True)
+valid_loader = DataLoader([item for item in valid_dataset if item is not None], batch_size=train_config["batch_size"], shuffle=False)
 
 # Define model
 model = UNetWithClassification(

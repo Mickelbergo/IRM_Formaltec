@@ -33,9 +33,9 @@ class Epoch:
         iou_scores = []
         
         with tqdm(dataloader, desc=self.stage_name, file=sys.stdout, disable=not self.verbose) as iterator:
-            for x, mask, mask_class in iterator:
+            for x, mask, _ , mask_class in iterator:
                 x, mask, mask_class = x.to(self.device), mask.to(self.device), mask_class.to(self.device)
-
+                
                 mask = mask.squeeze(1)
                 #print(f'image shape : {x.shape}, mask shape: {mask.shape}')
                 loss, y_pred, class_pred = self.batch_update(x, mask, mask_class)
@@ -79,15 +79,19 @@ class TrainEpoch(Epoch):
 
         # Forward pass
         y_pred, class_pred = self.model(x)
-        print(mask)
-        # Debugging information
-        print(f"y_pred shape: {y_pred.shape},Type: {y_pred.dtype}")
-        print(f"mask_class values: {mask_class}")
-        print(f"Class Pred shape: {class_pred.shape}, Type: {class_pred.dtype}")
-        print(f"Mask Class shape: {mask_class.shape}, Type: {mask_class.dtype}")
-        print(f"Mask shape: {mask.shape}, Type: {mask.dtype}")
+
+
+
+        # # Debugging information
+        # print(mask)
+        # print(f"y_pred shape: {y_pred.shape},Type: {y_pred.dtype}")
+        # print(f"mask_class values: {mask_class}")
+        # print(f"Class Pred shape: {class_pred.shape}, Type: {class_pred.dtype}")
+        # print(f"Mask Class shape: {mask_class.shape}, Type: {mask_class.dtype}")
+        # print(f"Mask shape: {mask.shape}, Type: {mask.dtype}")
 
         # Check for NaN or Inf in class_pred
+
         if torch.isnan(class_pred).any() or torch.isinf(class_pred).any():
             print("NaN or Inf found in class_pred!")
             raise ValueError("NaN or Inf values in class_pred")
@@ -95,11 +99,11 @@ class TrainEpoch(Epoch):
         # Loss computation
         seg_loss = self.segmentation_loss_fn(y_pred, mask)
         class_loss = self.classification_loss_fn(class_pred, mask_class)
-        print("this is okay")
-        loss = seg_loss + 0 #class_loss
+
+        loss = seg_loss + class_loss
         loss.backward()
 
-        print("this is also okay")
+
         self.optimizer.step()
         
         return loss, y_pred, class_pred
