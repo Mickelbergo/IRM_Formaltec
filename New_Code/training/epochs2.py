@@ -95,7 +95,7 @@ class TrainEpoch(Epoch):
         seg_loss = self.segmentation_loss_fn(y_pred, mask)
         #class_loss = self.classification_loss_fn(class_pred, mask_class)
 
-        loss = seg_loss + class_loss
+        loss = seg_loss + 0 #class_loss
         loss.backward()
 
         # Update the model's parameters
@@ -122,6 +122,6 @@ class ValidEpoch(Epoch):
             seg_loss = self.segmentation_loss_fn(y_pred, mask)
             #class_loss = self.classification_loss_fn(class_pred, mask_class)
 
-            loss = seg_loss + class_loss
+            loss = seg_loss + 0# class_loss
         
         return loss, y_pred, class_pred
