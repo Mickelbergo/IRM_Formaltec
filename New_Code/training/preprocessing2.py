@@ -25,8 +25,8 @@ class Dataset(BaseDataset):
 
     def __getitem__(self, ind):
         # Load image and mask
-        image_path = os.path.join(self.dir_path, "images_640_1280", self.image_ids[ind])
-        mask_path = os.path.join(self.dir_path, "masks_640_1280", self.mask_ids[ind])
+        image_path = os.path.sep.join([self.dir_path, "images_640_1280", self.image_ids[ind]])
+        mask_path = os.path.sep.join([self.dir_path, "masks_640_1280", self.mask_ids[ind]])
         
         image = cv2.imread(image_path, cv2.IMREAD_COLOR)
         mask = cv2.imread(mask_path, cv2.IMREAD_GRAYSCALE)

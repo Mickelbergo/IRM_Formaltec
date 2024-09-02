@@ -4,13 +4,6 @@ import numpy as np
 from tqdm import tqdm as tqdm
 import sys
 
-class WeightedCrossEntropyLoss(nn.Module):
-    def __init__(self, weight=None):
-        super(WeightedCrossEntropyLoss, self).__init__()
-        self.weight = weight
-
-    def forward(self, input, target):
-        return nn.functional.cross_entropy(input, target, weight=self.weight)
 
 class Epoch:
     def __init__(self, model, segmentation_loss_fn, classification_loss_fn, stage_name, device=None, verbose=True):
