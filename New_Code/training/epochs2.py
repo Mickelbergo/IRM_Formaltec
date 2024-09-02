@@ -1,7 +1,16 @@
 import torch
+import torch.nn as nn
 import numpy as np
 from tqdm import tqdm as tqdm
 import sys
+
+class WeightedCrossEntropyLoss(nn.Module):
+    def __init__(self, weight=None):
+        super(WeightedCrossEntropyLoss, self).__init__()
+        self.weight = weight
+
+    def forward(self, input, target):
+        return nn.functional.cross_entropy(input, target, weight=self.weight)
 
 class Epoch:
     def __init__(self, model, segmentation_loss_fn, classification_loss_fn, stage_name, device=None, verbose=True):
@@ -13,17 +22,13 @@ class Epoch:
         self.device = device
         self._to_device()
 
+    # Move model and loss functions to the specified device (GPU or CPU)
     def _to_device(self):
         self.model.to(self.device)
         self.segmentation_loss_fn.to(self.device)
         self.classification_loss_fn.to(self.device)
 
-    # def batch_update(self, x, mask, mask_class):
-    #     raise NotImplementedError
-
-    # def on_epoch_start(self):
-    #     pass
-
+    # Main method that runs through the dataset and processes batches
     def run(self, dataloader):
         self.on_epoch_start()
 
@@ -33,21 +38,24 @@ class Epoch:
         iou_scores = []
         
         with tqdm(dataloader, desc=self.stage_name, file=sys.stdout, disable=not self.verbose) as iterator:
-            for x, mask, _ , mask_class in iterator:
+            for x, mask, _, mask_class in iterator:
                 x, mask, mask_class = x.to(self.device), mask.to(self.device), mask_class.to(self.device)
                 
+                # Flatten the mask to remove any unnecessary dimensions
                 mask = mask.squeeze(1)
-                #print(f'image shape : {x.shape}, mask shape: {mask.shape}')
+
+                # Process the batch and calculate the loss
                 loss, y_pred, class_pred = self.batch_update(x, mask, mask_class)
 
+                # Record loss, accuracy, and IoU for the batch
                 losses.append(loss.item())
-                # Calculate accuracy and IoU for the segmentation task
                 acc = (y_pred.argmax(dim=1) == mask).float().mean().item()
                 iou_score = self.calculate_iou(y_pred.argmax(dim=1), mask)
 
                 accs.append(acc)
                 iou_scores.append(iou_score)
 
+                # Update logs with current metrics
                 logs.update({
                     'loss': np.mean(losses),
                     'accuracy': np.mean(accs),
@@ -59,70 +67,65 @@ class Epoch:
 
         return logs
 
+    # Method to calculate Intersection over Union (IoU)
     def calculate_iou(self, pred, target, n_classes=2):
         intersection = torch.logical_and(pred, target)
         union = torch.logical_or(pred, target)
         iou = torch.sum(intersection) / torch.sum(union)
         return iou.item()
 
-
+# Training epoch class
 class TrainEpoch(Epoch):
     def __init__(self, model, segmentation_loss_fn, classification_loss_fn, optimizer, device=None, verbose=True):
         super().__init__(model, segmentation_loss_fn, classification_loss_fn, stage_name='train', device=device, verbose=verbose)
         self.optimizer = optimizer
 
+    # Set the model to training mode at the start of each epoch
     def on_epoch_start(self):
         self.model.train()
 
+    # Process a single batch and update the model's parameters
     def batch_update(self, x, mask, mask_class):
         self.optimizer.zero_grad()
 
-        # Forward pass
+        # Forward pass through the model
         y_pred, class_pred = self.model(x)
 
-
-
-        # # Debugging information
-        # print(mask)
-        # print(f"y_pred shape: {y_pred.shape},Type: {y_pred.dtype}")
-        # print(f"mask_class values: {mask_class}")
-        # print(f"Class Pred shape: {class_pred.shape}, Type: {class_pred.dtype}")
-        # print(f"Mask Class shape: {mask_class.shape}, Type: {mask_class.dtype}")
-        # print(f"Mask shape: {mask.shape}, Type: {mask.dtype}")
-
-        # Check for NaN or Inf in class_pred
-
-        if torch.isnan(class_pred).any() or torch.isinf(class_pred).any():
-            print("NaN or Inf found in class_pred!")
-            raise ValueError("NaN or Inf values in class_pred")
-
-        # Loss computation
+        # Calculate both segmentation and classification losses
         seg_loss = self.segmentation_loss_fn(y_pred, mask)
         class_loss = self.classification_loss_fn(class_pred, mask_class)
 
-        loss = seg_loss + class_loss
+        # Combine the losses
+        loss = seg_loss + 0#class_loss
+
+        # Backpropagation
         loss.backward()
 
-
+        # Update the model's parameters
         self.optimizer.step()
         
         return loss, y_pred, class_pred
 
-
+# Validation epoch class
 class ValidEpoch(Epoch):
     def __init__(self, model, segmentation_loss_fn, classification_loss_fn, device=None, verbose=True):
         super().__init__(model, segmentation_loss_fn, classification_loss_fn, stage_name='valid', device=device, verbose=verbose)
 
+    # Set the model to evaluation mode at the start of each epoch
     def on_epoch_start(self):
         self.model.eval()
 
+    # Process a single batch without updating the model's parameters
     def batch_update(self, x, mask, mask_class):
         with torch.no_grad():
+            # Forward pass through the model
             y_pred, class_pred = self.model(x)
 
+            # Calculate both segmentation and classification losses
             seg_loss = self.segmentation_loss_fn(y_pred, mask)
             class_loss = self.classification_loss_fn(class_pred, mask_class)
 
-            loss = seg_loss + class_loss
+            # Combine the losses
+            loss = seg_loss + 0 #class_loss
         
         return loss, y_pred, class_pred

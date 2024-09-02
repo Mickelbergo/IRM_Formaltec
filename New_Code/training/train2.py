@@ -8,9 +8,10 @@ from torch.utils.data import DataLoader
 import segmentation_models_pytorch as smp
 import matplotlib.pyplot as plt
 from preprocessing2 import Dataset
-from epochs2 import TrainEpoch, ValidEpoch
+from epochs2 import TrainEpoch, ValidEpoch, WeightedCrossEntropyLoss
 from model import UNetWithClassification
 
+print(torch.cuda.is_available())
 # Load configurations
 with open('New_Code/configs/training_config.json') as f:
     train_config = json.load(f)
@@ -60,8 +61,8 @@ valid_dataset = Dataset(
     target_size=(640, 640)  # Ensure it's the same size as for training
 )
 
-train_loader = DataLoader([item for item in train_dataset if item is not None], batch_size=train_config["batch_size"], shuffle=True)
-valid_loader = DataLoader([item for item in valid_dataset if item is not None], batch_size=train_config["batch_size"], shuffle=False)
+train_loader = DataLoader(train_dataset, batch_size=train_config["batch_size"], shuffle=True)
+valid_loader = DataLoader(valid_dataset, batch_size=train_config["batch_size"], shuffle=False)
 
 # Define model
 model = UNetWithClassification(
@@ -76,8 +77,9 @@ model = model.to(DEVICE)
 # Define optimizer, loss, and scheduler
 optimizer = torch.optim.Adam(model.parameters(), lr=train_config["optimizer_lr"])
 scheduler = torch.optim.lr_scheduler.ExponentialLR(optimizer, gamma=train_config["lr_scheduler_gamma"])
-segmentation_loss_fn = nn.CrossEntropyLoss()  # Segmentation loss
-classification_loss_fn = nn.CrossEntropyLoss()  # Classification loss
+class_weights = torch.tensor(train_config["class_weights"]).to(DEVICE)
+segmentation_loss_fn = WeightedCrossEntropyLoss(weight = class_weights )  # Segmentation loss
+classification_loss_fn = nn.CrossEntropyLoss() # Classification loss
 
 # Define training and validation epochs
 train_epoch = TrainEpoch(model, segmentation_loss_fn, classification_loss_fn, optimizer, device=DEVICE)
