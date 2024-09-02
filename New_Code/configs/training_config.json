@@ -2,7 +2,7 @@
     "device": "cuda",
     "path": "E:/ForMalTeC/Wound_segmentation_III/Data",
     "model_version": "v1.0",
-    "encoder": "resnet101",
+    "encoder": "resnet50",
     "encoder_weights": "imagenet",
     "activation": "sigmoid",
     "batch_size": 8,
@@ -14,5 +14,6 @@
     "metrics": ["accuracy", "iou_score"],
     "segmentation_classes": 2,
     "classification_classes": 15,
-    "class_weights": [0.1,0.9]
+    "class_weights": [0.1,0.9],
+    "dice": true
 }

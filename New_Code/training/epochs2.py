@@ -6,9 +6,10 @@ import sys
 
 
 class Epoch:
-    def __init__(self, model, segmentation_loss_fn, classification_loss_fn, stage_name, device=None, verbose=True):
+    def __init__(self, model, segmentation_loss_fn_1, segmentation_loss_fn_2, classification_loss_fn, stage_name, device=None, verbose=True):
         self.model = model
-        self.segmentation_loss_fn = segmentation_loss_fn
+        self.segmentation_loss_fn_1 = segmentation_loss_fn_1
+        self.segmentation_loss_fn_2 = segmentation_loss_fn_2
         self.classification_loss_fn = classification_loss_fn
         self.stage_name = stage_name
         self.verbose = verbose
@@ -18,7 +19,8 @@ class Epoch:
     # Move model and loss functions to the specified device (GPU or CPU)
     def _to_device(self):
         self.model.to(self.device)
-        self.segmentation_loss_fn.to(self.device)
+        self.segmentation_loss_fn_1.to(self.device)
+        self.segmentation_loss_fn_2.to(self.device)
         self.classification_loss_fn.to(self.device)
 
     # Main method that runs through the dataset and processes batches
@@ -69,8 +71,8 @@ class Epoch:
 
 # Training epoch class
 class TrainEpoch(Epoch):
-    def __init__(self, model, segmentation_loss_fn, classification_loss_fn, optimizer, device=None, verbose=True):
-        super().__init__(model, segmentation_loss_fn, classification_loss_fn, stage_name='train', device=device, verbose=verbose)
+    def __init__(self, model, segmentation_loss_fn_1, segmentation_loss_fn_2 = None,  classification_loss_fn = None , optimizer = None, device=None, verbose=True):
+        super().__init__(model, segmentation_loss_fn_1, segmentation_loss_fn_2, classification_loss_fn, stage_name='train', device=device, verbose=verbose)
         self.optimizer = optimizer
 
     # Set the model to training mode at the start of each epoch
@@ -85,7 +87,17 @@ class TrainEpoch(Epoch):
         y_pred, class_pred = self.model(x)
 
         # Calculate both segmentation and classification losses
-        seg_loss = self.segmentation_loss_fn(y_pred, mask)
+        seg_loss = self.segmentation_loss_fn_1(y_pred, mask)
+
+        #also incorporate dice loss
+        if self.segmentation_loss_fn_2 != None:
+            seg_loss2 = self.segmentation_loss_fn_2(y_pred, mask)
+        else: seg_loss2 = 0
+
+        seg_loss = seg_loss + seg_loss2
+        
+
+        
         #class_loss = self.classification_loss_fn(class_pred, mask_class)
 
         loss = seg_loss + 0 #class_loss
@@ -98,8 +110,8 @@ class TrainEpoch(Epoch):
 
 # Validation epoch class
 class ValidEpoch(Epoch):
-    def __init__(self, model, segmentation_loss_fn, classification_loss_fn, device=None, verbose=True):
-        super().__init__(model, segmentation_loss_fn, classification_loss_fn, stage_name='valid', device=device, verbose=verbose)
+    def __init__(self, model, segmentation_loss_fn_1, segmentation_loss_fn_2 = None,  classification_loss_fn = None, device=None, verbose=True):
+        super().__init__(model, segmentation_loss_fn_1, segmentation_loss_fn_2, classification_loss_fn, stage_name='valid', device=device, verbose=verbose)
 
     # Set the model to evaluation mode at the start of each epoch
     def on_epoch_start(self):
@@ -112,9 +124,17 @@ class ValidEpoch(Epoch):
             y_pred, class_pred = self.model(x)
 
             # Calculate both segmentation and classification losses
-            seg_loss = self.segmentation_loss_fn(y_pred, mask)
+            seg_loss = self.segmentation_loss_fn_1(y_pred, mask)
+
+            if self.segmentation_loss_fn_2 != None:
+                seg_loss2 = self.segmentation_loss_fn_2(y_pred, mask)
+            else: seg_loss2 = 0
+
+            seg_loss = seg_loss + seg_loss2
+
+
             #class_loss = self.classification_loss_fn(class_pred, mask_class)
 
-            loss = seg_loss + 0# class_loss
+            loss = seg_loss + 0 # class_loss
         
         return loss, y_pred, class_pred

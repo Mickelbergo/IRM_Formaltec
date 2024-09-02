@@ -10,6 +10,7 @@ import matplotlib.pyplot as plt
 from preprocessing2 import Dataset
 from epochs2 import TrainEpoch, ValidEpoch
 from model import UNetWithClassification
+from preprocessing_memory import Memory_dataset
 def main():
 
     print(torch.cuda.is_available())
@@ -63,8 +64,8 @@ def main():
         target_size=(640, 640)  # Ensure it's the same size as for training
     )
 
-    train_loader = DataLoader(train_dataset, batch_size=train_config["batch_size"], shuffle=True, num_workers= 16)
-    valid_loader = DataLoader(valid_dataset, batch_size=train_config["batch_size"], shuffle=False, num_workers= 16)
+    train_loader = DataLoader(train_dataset, batch_size=train_config["batch_size"], shuffle=True, num_workers= 0)
+    valid_loader = DataLoader(valid_dataset, batch_size=train_config["batch_size"], shuffle=False, num_workers= 0)
 
     # Define model
     model = UNetWithClassification(
@@ -80,13 +81,15 @@ def main():
     optimizer = torch.optim.Adam(model.parameters(), lr=train_config["optimizer_lr"])
     scheduler = torch.optim.lr_scheduler.ExponentialLR(optimizer, gamma=train_config["lr_scheduler_gamma"])
     class_weights = torch.tensor(train_config["class_weights"]).to(DEVICE)
-    #segmentation_loss_fn = smp.losses.DiceLoss(mode = "multiclass")
-    segmentation_loss_fn = nn.CrossEntropyLoss(weight = class_weights)  # Segmentation loss
+
+    segmentation_loss_fn_1 = nn.CrossEntropyLoss(weight = class_weights)
+    if train_config["dice"]:
+        segmentation_loss_fn_2 = smp.losses.DiceLoss(mode = "multiclass")  # Segmentation loss
     classification_loss_fn = nn.CrossEntropyLoss() # Classification loss
 
     # Define training and validation epochs
-    train_epoch = TrainEpoch(model, segmentation_loss_fn, classification_loss_fn, optimizer, device=DEVICE)
-    valid_epoch = ValidEpoch(model, segmentation_loss_fn, classification_loss_fn, device=DEVICE)
+    train_epoch = TrainEpoch(model, segmentation_loss_fn_1, segmentation_loss_fn_2, classification_loss_fn, optimizer, device=DEVICE)
+    valid_epoch = ValidEpoch(model, segmentation_loss_fn_1, segmentation_loss_fn_2, classification_loss_fn, device=DEVICE)
 
     # Training loop
     max_score = 0
