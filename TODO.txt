@@ -1,9 +1,5 @@
-1. The preprocessing 2 steps with calculating the classes seems flawed.
-Particularly, i get an out of bounds error when calculating the cross entropy loss (already in the segmentation step)
-
-switch to cpu for more meaningful error messages
-
-
-
-the mask input to the segmentation loss function shouold only have values 0 for background and 1 for foreground
-look at preprocessing2 
+1. finetune loss functions
+2. look at different architectures
+3. perform augmentation
+4. visualize some augmentations and masks
+5. huggingface / transformers
