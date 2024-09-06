@@ -10,5 +10,6 @@
         "scale": [0.8, 1.2]
     },
     "wound_classes": ["background", "wound"],
-    "device": "cpu"
+    "device": "cpu",
+    "target_size": [640,640]
 }

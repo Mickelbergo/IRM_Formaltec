@@ -5,13 +5,8 @@ import torchvision.transforms.functional as F
 
 
 class Augmentation:
-    def __init__(self):
-        # Define parameters for image transformations
-        self.transforms = v2.Compose([
-            v2.RandomResizedCrop(size=(640, 640), scale=(0.5, 1.0), ratio=(1.0, 1.0)),
-            v2.RandomHorizontalFlip(p=0.5),
-            v2.RandomVerticalFlip(p=0.5),
-        ])
+    def __init__(self, target_size):
+        self.target_size = target_size
 
         # Normalization only for images
         self.normalize = v2.Compose([
@@ -31,8 +26,8 @@ class Augmentation:
         params = v2.RandomResizedCrop.get_params(image, scale=(1.0, 1.0), ratio=(1.0, 1.0))
         
         # Apply RandomResizedCrop to both image and mask using the same parameters
-        image = F.resized_crop(image, *params, size=(640, 640), interpolation=v2.InterpolationMode.BILINEAR)
-        mask = F.resized_crop(mask, *params, size=(640, 640), interpolation=v2.InterpolationMode.NEAREST)
+        image = F.resized_crop(image, *params, size= self.target_size, interpolation=v2.InterpolationMode.BILINEAR)
+        mask = F.resized_crop(mask, *params, size= self.target_size, interpolation=v2.InterpolationMode.NEAREST)
 
         # Apply the same flipping transformations to both image and mask
         if torch.rand(1) < 0.5:
@@ -46,10 +41,38 @@ class Augmentation:
         # Normalize the image (but not the mask)
         image = self.normalize(image)
 
-        # print(f"Augmented image size: {image.shape}")
-        # print(f"Augmented mask size: {mask.shape}")
+        return image, mask
+
+class ValidationAugmentation:
+    def __init__(self, target_size):
+        # Define fixed resizing for validation (no randomness)
+        self.transforms = v2.Compose([
+            v2.Resize(size= target_size),  # Resize to the same size as in training
+        ])
+
+        # Normalization only for images (same as training)
+        self.normalize = v2.Compose([
+            v2.ToDtype(torch.float32, scale=True),
+            v2.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
+        ])
+
+    def augment(self, image, mask):
+        # Ensure the image and mask are Torch tensors
+        if not isinstance(image, torch.Tensor):
+            raise TypeError("Image should be a tensor")
+        if not isinstance(mask, torch.Tensor):
+            raise TypeError("Mask should be a tensor")
+
+        # Resize both image and mask (without randomness)
+        image = self.transforms(image)
+        mask = self.transforms(mask)
+
+        # Normalize the image (but not the mask)
+        image = self.normalize(image)
 
         return image, mask
+
+################################## DEPRECATED ##################################################
 
 
 def resize_and_pad(image, mask, target_size=(640, 640)):

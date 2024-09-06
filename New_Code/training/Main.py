@@ -3,18 +3,23 @@ import torch
 import random
 import json
 import torch.nn as nn
-
 from torch.utils.data import DataLoader
 import segmentation_models_pytorch as smp
-import matplotlib.pyplot as plt
-from preprocessing2 import Dataset
-from epochs2 import TrainEpoch, ValidEpoch
-from model import UNetWithClassification
-from preprocessing_memory import Memory_dataset
 import torch.nn.functional as F
+import matplotlib.pyplot as plt
+
+
+from Preprocessing import Dataset
+from Epochs import TrainEpoch, ValidEpoch
+from Model import UNetWithClassification
+from preprocessing_memory import Memory_dataset
+
+
 def main():
 
-    print(torch.cuda.is_available())
+    print(f"Cuda Available: {torch.cuda.is_available()}")
+
+    
     # Load configurations
     with open('New_Code/configs/training_config.json') as f:
         train_config = json.load(f)
@@ -51,22 +56,20 @@ def main():
         dir_path=path,
         image_ids=train_ids,
         mask_ids=train_ids,  # Assuming mask names match image names
-        augmentation=preprocessing_config["augmentation"],
-        preprocessing=True,
-        target_size=(640, 640)  # adjust this size
+        augmentation= 'train',
+        target_size= tuple(preprocessing_config["target_size"])
     )
 
     valid_dataset = Dataset(
         dir_path=path,
         image_ids=valid_ids,
         mask_ids=valid_ids,  # Assuming mask names match image names
-        augmentation=True,
-        preprocessing=True,
-        target_size=(640, 640)  # Ensure it's the same size as for training
+        augmentation='validation',
+        target_size= tuple(preprocessing_config["target_size"])
     )
 
-    train_loader = DataLoader(train_dataset, batch_size=train_config["batch_size"], shuffle=True, num_workers= 0)
-    valid_loader = DataLoader(valid_dataset, batch_size=train_config["batch_size"], shuffle=False, num_workers=0)
+    train_loader = DataLoader(train_dataset, batch_size=train_config["batch_size"], shuffle=True, num_workers= 8)
+    valid_loader = DataLoader(valid_dataset, batch_size=train_config["batch_size"], shuffle=False, num_workers=8)
 
     # Define model
     model = UNetWithClassification(
@@ -83,14 +86,16 @@ def main():
     scheduler = torch.optim.lr_scheduler.ExponentialLR(optimizer, gamma=train_config["lr_scheduler_gamma"])
     class_weights = torch.tensor(train_config["class_weights"]).to(DEVICE)
 
-    segmentation_loss_fn_1 = nn.CrossEntropyLoss(weight = class_weights)
+    BCE_Loss = nn.CrossEntropyLoss(weight = class_weights)
     if train_config["dice"]:
-        segmentation_loss_fn_2 = smp.losses.DiceLoss(mode = "multiclass")  # Segmentation loss
+        DICE_Loss = smp.losses.DiceLoss(mode = "multiclass")
+    #Segmentation loss function is either only weight BCE or weighted BCE + DICE
+
     classification_loss_fn = nn.CrossEntropyLoss() # Classification loss
 
     # Define training and validation epochs
-    train_epoch = TrainEpoch(model, segmentation_loss_fn_1, segmentation_loss_fn_2, classification_loss_fn, optimizer, device=DEVICE)
-    valid_epoch = ValidEpoch(model, segmentation_loss_fn_1, segmentation_loss_fn_2, classification_loss_fn, device=DEVICE)
+    train_epoch = TrainEpoch(model, BCE_Loss, DICE_Loss, classification_loss_fn, optimizer, device=DEVICE)
+    valid_epoch = ValidEpoch(model, BCE_Loss, DICE_Loss, classification_loss_fn, device=DEVICE)
 
     # Training loop
     max_score = 0
