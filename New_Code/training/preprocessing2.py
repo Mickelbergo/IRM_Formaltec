@@ -5,9 +5,9 @@ import kornia as K
 import numpy as np
 from torch.utils.data import Dataset as BaseDataset
 from scipy import stats
-from augmentations import resize_and_pad  # Import the resize_and_pad function
+from augmentations import resize_and_pad, Augmentation  # Import the resize_and_pad function
 import json
-
+import torch.nn.functional as F
 # Load preprocessing config
 with open('New_Code/configs/preprocessing_config.json') as f:
     preprocessing_config = json.load(f)
@@ -25,8 +25,8 @@ class Dataset(BaseDataset):
 
     def __getitem__(self, ind):
         # Load image and mask
-        image_path = os.path.sep.join([self.dir_path, "images_640_1280", self.image_ids[ind]])
-        mask_path = os.path.sep.join([self.dir_path, "masks_640_1280", self.mask_ids[ind]])
+        image_path = os.path.sep.join([self.dir_path, "new_images_640_1280", self.image_ids[ind]])
+        mask_path = os.path.sep.join([self.dir_path, "new_masks_640_1280", self.mask_ids[ind]])
         
         image = cv2.imread(image_path, cv2.IMREAD_COLOR)
         mask = cv2.imread(mask_path, cv2.IMREAD_GRAYSCALE)
@@ -39,10 +39,9 @@ class Dataset(BaseDataset):
         
         if image is None or mask is None:
             return None  # or you could return an empty tensor, or raise an exception
-    
-        # Apply resizing and padding
-        image, mask = resize_and_pad(image, mask, self.target_size)
-        
+
+        #image, mask = resize_and_pad(image, mask, self.target_size)
+
         # Convert mask to binary segmentation mask
         binary_mask = (mask > 0).astype(np.uint8)  # All non-zero (wound) pixels become 1
         
@@ -59,15 +58,17 @@ class Dataset(BaseDataset):
             # Handle edge case where the mask is entirely background
             dominant_class = 0  # or consider ignoring this image in training
         
+
         # Convert to tensor
         image = K.image_to_tensor(image).float().to(DEVICE)
         binary_mask = K.image_to_tensor(binary_mask).long().to(DEVICE)  # Binary mask for segmentation
         mask_class = K.image_to_tensor(mask_class).long().to(DEVICE)  # Class-specific mask
         
         # Apply preprocessing if necessary
-        if self.preprocessing:
-            image = self._preprocess(image)
-        
+        image, binary_mask = Augmentation().augment(image, binary_mask)
+
+        # if self.preprocessing:
+        #     image = self._preprocess(image)
 
         return image, binary_mask, mask_class, dominant_class
     
@@ -79,3 +80,4 @@ class Dataset(BaseDataset):
 
     def __len__(self):
         return len(self.image_ids)
+

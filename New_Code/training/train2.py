@@ -11,6 +11,7 @@ from preprocessing2 import Dataset
 from epochs2 import TrainEpoch, ValidEpoch
 from model import UNetWithClassification
 from preprocessing_memory import Memory_dataset
+import torch.nn.functional as F
 def main():
 
     print(torch.cuda.is_available())
@@ -29,8 +30,8 @@ def main():
     model_version = train_config["model_version"]
 
     # Load all image and mask paths
-    image_dir = os.path.join(path, "images_640_1280")
-    mask_dir = os.path.join(path, "masks_640_1280")
+    image_dir = os.path.join(path, "new_images_640_1280")
+    mask_dir = os.path.join(path, "new_masks_640_1280")
 
     valid_extensions = ('.jpg', '.jpeg', '.png', '.bmp', '.tiff')
     image_ids = sorted([f for f in os.listdir(image_dir) if f.lower().endswith(valid_extensions)])
@@ -59,13 +60,13 @@ def main():
         dir_path=path,
         image_ids=valid_ids,
         mask_ids=valid_ids,  # Assuming mask names match image names
-        augmentation=None,
+        augmentation=True,
         preprocessing=True,
         target_size=(640, 640)  # Ensure it's the same size as for training
     )
 
     train_loader = DataLoader(train_dataset, batch_size=train_config["batch_size"], shuffle=True, num_workers= 0)
-    valid_loader = DataLoader(valid_dataset, batch_size=train_config["batch_size"], shuffle=False, num_workers= 0)
+    valid_loader = DataLoader(valid_dataset, batch_size=train_config["batch_size"], shuffle=False, num_workers=0)
 
     # Define model
     model = UNetWithClassification(

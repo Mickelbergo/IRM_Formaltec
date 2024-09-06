@@ -1,4 +1,56 @@
 import cv2
+from torchvision.transforms import v2
+import torch
+import torchvision.transforms.functional as F
+
+
+class Augmentation:
+    def __init__(self):
+        # Define parameters for image transformations
+        self.transforms = v2.Compose([
+            v2.RandomResizedCrop(size=(640, 640), scale=(0.5, 1.0), ratio=(1.0, 1.0)),
+            v2.RandomHorizontalFlip(p=0.5),
+            v2.RandomVerticalFlip(p=0.5),
+        ])
+
+        # Normalization only for images
+        self.normalize = v2.Compose([
+            v2.ToDtype(torch.float32, scale=True),
+            v2.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
+        ])
+
+    def augment(self, image, mask):
+
+        # Ensure the image and mask are Torch tensors
+        if not isinstance(image, torch.Tensor):
+            raise TypeError("Image should be a tensor")
+        if not isinstance(mask, torch.Tensor):
+            raise TypeError("Mask should be a tensor")
+
+        # Get the parameters for RandomResizedCrop (apply same params to both image and mask)
+        params = v2.RandomResizedCrop.get_params(image, scale=(1.0, 1.0), ratio=(1.0, 1.0))
+        
+        # Apply RandomResizedCrop to both image and mask using the same parameters
+        image = F.resized_crop(image, *params, size=(640, 640), interpolation=v2.InterpolationMode.BILINEAR)
+        mask = F.resized_crop(mask, *params, size=(640, 640), interpolation=v2.InterpolationMode.NEAREST)
+
+        # Apply the same flipping transformations to both image and mask
+        if torch.rand(1) < 0.5:
+            image = F.hflip(image)
+            mask = F.hflip(mask)
+
+        if torch.rand(1) < 0.5:
+            image = F.vflip(image)
+            mask = F.vflip(mask)
+
+        # Normalize the image (but not the mask)
+        image = self.normalize(image)
+
+        # print(f"Augmented image size: {image.shape}")
+        # print(f"Augmented mask size: {mask.shape}")
+
+        return image, mask
+
 
 def resize_and_pad(image, mask, target_size=(640, 640)):
     """
@@ -42,4 +94,8 @@ def resize_and_pad(image, mask, target_size=(640, 640)):
     
     return padded_image, padded_mask
 
-#add more augmentation functions below as needed.
+
+
+
+
+

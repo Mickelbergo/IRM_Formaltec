@@ -28,8 +28,8 @@ class Memory_dataset(BaseDataset):
 
     def _load_data(self):
         for i in range(len(self.image_ids)):
-            image_path = os.path.sep.join([self.dir_path, "images_640_1280", self.image_ids[i]])
-            mask_path = os.path.sep.join([self.dir_path, "masks_640_1280", self.mask_ids[i]])
+            image_path = os.path.sep.join([self.dir_path, "new_images_640_1280", self.image_ids[i]])
+            mask_path = os.path.sep.join([self.dir_path, "new_masks_640_1280", self.mask_ids[i]])
             
             image = cv2.imread(image_path, cv2.IMREAD_COLOR)
             mask = cv2.imread(mask_path, cv2.IMREAD_GRAYSCALE)
