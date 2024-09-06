@@ -2,7 +2,7 @@ import os
 from PIL import Image
 
 # Specify the folder containing the images
-folder_path = "E:/ForMaLTeC/Wound_segmentation_III/Data/Masks_640_1280/"
+folder_path = "C:/users/comi/Desktop/Wound_segmentation_III/Data/"
 
 # Set to store all unique RGB values
 all_unique_rgb_values = set()

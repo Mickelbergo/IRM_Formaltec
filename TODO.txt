@@ -1,5 +1,3 @@
-1. finetune loss functions
-2. look at different architectures
-3. perform augmentation
-4. visualize some augmentations and masks
-5. huggingface / transformers
+1. train model
+2. visualize some augmentations and masks
+3. huggingface / transformers 

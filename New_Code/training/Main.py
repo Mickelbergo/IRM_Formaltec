@@ -7,8 +7,6 @@ from torch.utils.data import DataLoader
 import segmentation_models_pytorch as smp
 import torch.nn.functional as F
 import matplotlib.pyplot as plt
-
-
 from Preprocessing import Dataset
 from Epochs import TrainEpoch, ValidEpoch
 from Model import UNetWithClassification
@@ -17,9 +15,10 @@ from preprocessing_memory import Memory_dataset
 
 def main():
 
+
     print(f"Cuda Available: {torch.cuda.is_available()}")
 
-    
+
     # Load configurations
     with open('New_Code/configs/training_config.json') as f:
         train_config = json.load(f)
@@ -68,8 +67,8 @@ def main():
         target_size= tuple(preprocessing_config["target_size"])
     )
 
-    train_loader = DataLoader(train_dataset, batch_size=train_config["batch_size"], shuffle=True, num_workers= 8)
-    valid_loader = DataLoader(valid_dataset, batch_size=train_config["batch_size"], shuffle=False, num_workers=8)
+    train_loader = DataLoader(train_dataset, batch_size=train_config["batch_size"], shuffle=True, num_workers= 6)
+    valid_loader = DataLoader(valid_dataset, batch_size=train_config["batch_size"], shuffle=False, num_workers=6)
 
     # Define model
     model = UNetWithClassification(

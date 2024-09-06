@@ -10,7 +10,6 @@ import json
 import torch.nn.functional as F
 
 
-
 # Load preprocessing config
 with open('New_Code/configs/preprocessing_config.json') as f:
     preprocessing_config = json.load(f)
