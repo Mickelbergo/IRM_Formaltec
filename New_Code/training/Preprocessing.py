@@ -5,7 +5,7 @@ import kornia as K
 import numpy as np
 from torch.utils.data import Dataset as BaseDataset
 from scipy import stats
-from augmentations import resize_and_pad, Augmentation  # Import the resize_and_pad function
+from augmentations import resize_and_pad, Augmentation, ValidationAugmentation # Import the resize_and_pad function
 import json
 import torch.nn.functional as F
 

@@ -1,3 +1,4 @@
-1. train model
-2. visualize some augmentations and masks
-3. huggingface / transformers 
+1. continue transformer notebook
+-> specifically look at chatgpt from last week
+-> find a way to incorporate different labels for panoptic segmentation
+2. use the trained model to segment some images and look at results
