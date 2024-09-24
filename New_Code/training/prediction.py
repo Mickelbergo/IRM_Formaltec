@@ -1,0 +1,157 @@
+import os
+import sys
+import torch
+import torchvision.transforms as transforms
+from PIL import Image
+import numpy as np
+import segmentation_models_pytorch as smp
+import json
+import matplotlib.pyplot as plt
+
+# Import your custom model definition
+import model  # Ensure this module is named 'model.py' and contains 'UNetWithClassification'
+
+# Map 'Model' to 'model' in sys.modules if the module was named 'Model' during saving
+sys.modules['Model'] = model  # Optional: Only if needed to resolve module name discrepancies
+
+def main():
+    # Set device to GPU if available
+    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    print(f"Using device: {device}")
+
+    # Paths
+    model_path = r'C:\Users\comi\Desktop\Wound_segmentation_III\Data\best_model_v1.0.pth'  # Adjust if necessary
+    image_dir = r'C:\Users\comi\Desktop\Wound_segmentation_III\Data\example_images'
+    output_dir = r'C:\Users\comi\Desktop\Wound_segmentation_III\Data\example_images_segmented'
+
+    # Create output directory if it doesn't exist
+    os.makedirs(output_dir, exist_ok=True)
+
+    # Load configurations
+    with open('New_Code/configs/training_config.json') as f:
+        train_config = json.load(f)
+    with open('New_Code/configs/preprocessing_config.json') as f:
+        preprocessing_config = json.load(f)
+
+    # Load the trained model directly
+    model = torch.load(model_path, map_location=device)
+    model = model.to(device)
+    model.eval()
+    print("Model loaded successfully.")
+
+    # Rest of your code remains the same...
+
+    # Get list of image files
+    valid_extensions = ('.jpg', '.jpeg', '.png', '.bmp', '.tiff')
+    image_files = sorted([f for f in os.listdir(image_dir) if f.lower().endswith(valid_extensions)])
+    image_files = image_files[:50]  # Process only the first 50 images
+
+    # Define preprocessing transformations
+    target_size = tuple(preprocessing_config["target_size"])  # Should be (H, W)
+    print(f"Target size from preprocessing config: {target_size}")
+
+    if len(target_size) == 2:
+        height, width = target_size
+    else:
+        raise ValueError("Invalid target_size in preprocessing_config")
+
+    preprocess = transforms.Compose([
+        transforms.Resize((height, width)),
+        transforms.ToTensor(),
+        # Include normalization if used during training
+        # transforms.Normalize(mean=preprocessing_config["mean"], std=preprocessing_config["std"])
+    ])
+
+    print(f"Preprocessing transformations: {preprocess}")
+
+    # Loop over images and perform segmentation
+    for img_name in image_files:
+        img_path = os.path.join(image_dir, img_name)
+        img = Image.open(img_path).convert('RGB')
+
+        print(f"\nProcessing {img_name}")
+        print(f"Original image size: {img.size}")  # (Width, Height)
+
+        # Keep a copy of the original image for overlay
+        original_img = img.copy()
+
+        # Preprocess the image
+        input_img = preprocess(img)
+        print(f"Input image shape after preprocessing: {input_img.shape}")  # (C, H, W)
+
+        input_img = input_img.unsqueeze(0).to(device)  # Add batch dimension
+        print(f"Model input shape: {input_img.shape}")  # (1, C, H, W)
+
+        # Perform inference
+        with torch.no_grad():
+            output = model(input_img)
+            if isinstance(output, (tuple, list)):
+                segmentation_output = output[0]
+            else:
+                segmentation_output = output
+
+            print(f"Raw model output shape: {segmentation_output.shape}")
+
+            # Apply activation function
+            activation = train_config.get("activation")
+            if activation == "softmax":
+                segmentation_output = torch.softmax(segmentation_output, dim=1)
+            elif activation == "sigmoid":
+                segmentation_output = torch.sigmoid(segmentation_output)
+            # If no activation, proceed with raw outputs
+
+            print(f"Segmentation output shape after activation: {segmentation_output.shape}")
+
+            # For multi-class segmentation, use argmax over the channel dimension (dim=1)
+            predicted_mask = torch.argmax(segmentation_output, dim=1)  # Shape: [batch_size, H, W]
+            predicted_mask = predicted_mask.squeeze(0).cpu().numpy()    # Remove batch dimension
+
+            plt.imshow(predicted_mask, cmap='gray')
+            plt.title('Predicted Mask')
+            plt.show()
+            # Ensure predicted_mask is of type uint8
+            predicted_mask = predicted_mask.astype(np.uint8)
+
+            print(f"Predicted mask shape: {predicted_mask.shape}")
+            print(f"Unique mask values: {np.unique(predicted_mask)}")
+
+        # Create a color mask
+        color_map = {
+            0: [0, 0, 0],        # Background - black
+            1: [255, 0, 0],      # Wound - red
+            # Add more classes and colors if needed
+        }
+
+        # Create the color mask
+        color_mask = np.zeros((predicted_mask.shape[0], predicted_mask.shape[1], 3), dtype=np.uint8)
+        for class_id, color in color_map.items():
+            color_mask[predicted_mask == class_id] = color
+
+        # Resize the color mask to match the original image size
+        if original_img.size != (predicted_mask.shape[1], predicted_mask.shape[0]):  # PIL size is (Width, Height)
+            color_mask_pil = Image.fromarray(color_mask)
+            color_mask_pil = color_mask_pil.resize(original_img.size, resample=Image.NEAREST)
+            color_mask = np.array(color_mask_pil)
+
+            print(f"Resized color mask shape: {color_mask.shape}")
+        else:
+            color_mask_pil = Image.fromarray(color_mask)
+
+        # Overlay the color mask on the original image
+        original_img_np = np.array(original_img)
+        if original_img_np.shape != color_mask.shape:
+            print(f"Warning: Dimension mismatch between original image and color mask.")
+            print(f"Original image shape: {original_img_np.shape}, Color mask shape: {color_mask.shape}")
+
+        overlay = (0.7 * original_img_np + 0.3 * color_mask).astype(np.uint8)
+
+        # Save the overlaid image
+        overlay_img = Image.fromarray(overlay)
+        output_path = os.path.join(output_dir, img_name)
+        overlay_img.save(output_path)
+        print(f"Saved segmented image: {output_path}")
+
+    print("\nProcessing completed.")
+
+if __name__ == '__main__':
+    main()

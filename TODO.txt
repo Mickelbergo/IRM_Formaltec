@@ -1,4 +1,7 @@
-1. continue transformer notebook
--> specifically look at chatgpt from last week
--> find a way to incorporate different labels for panoptic segmentation
-2. use the trained model to segment some images and look at results
+1. look at the transformer_scratch notebook on the training pc (it has not been committed yet)
+- otherwise copy back from chatgpt
+
+
+2. the trained model with iou of 0.5 only predicts background ;( 
+
+    
