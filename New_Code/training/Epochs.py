@@ -3,7 +3,7 @@ import torch.nn as nn
 import numpy as np
 from tqdm import tqdm as tqdm
 import sys
-
+import matplotlib.pyplot as plt
 
 class Epoch:
     def __init__(self, model, BCE_LOSS, DICE_Loss, classification_loss_fn, stage_name, device=None, verbose=True):
@@ -33,14 +33,32 @@ class Epoch:
         iou_scores = []
         
         with tqdm(dataloader, desc=self.stage_name, file=sys.stdout, disable=not self.verbose) as iterator:
-            for x, mask, _, mask_class in iterator:
-                x, mask, mask_class = x.to(self.device), mask.to(self.device), mask_class.to(self.device)
+            for x, mask, mask_classes, _ in iterator:
+                x, mask, mask_classes = x.to(self.device), mask.to(self.device), mask_classes.to(self.device)
                 
                 # Flatten the mask to remove any unnecessary dimensions
+                
                 mask = mask.squeeze(1)
 
                 # Process the batch and calculate the loss
-                loss, y_pred, class_pred = self.batch_update(x, mask, mask_class)
+                loss, y_pred, class_pred = self.batch_update(x, mask, mask_classes)
+
+                # Display the image
+                maskk = mask
+                plt.subplot(1, 2, 1)
+                plt.imshow(maskk[0], cmap='gray')
+                plt.title('mask')
+                plt.axis('off')
+                
+                pred = y_pred.argmax(dim=1)
+                # Display the corresponding mask
+                plt.subplot(1, 2, 2)
+                plt.imshow(pred[0], cmap='gray')
+                plt.title('pred')
+                plt.axis('off')
+                
+                plt.draw()
+                plt.pause(0.001)
 
                 # Record loss, accuracy, and IoU for the batch
                 losses.append(loss.item())

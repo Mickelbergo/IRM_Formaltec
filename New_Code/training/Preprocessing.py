@@ -8,7 +8,7 @@ from scipy import stats
 from augmentations import resize_and_pad, Augmentation, ValidationAugmentation # Import the resize_and_pad function
 import json
 import torch.nn.functional as F
-
+import matplotlib.pyplot as plt
 
 # Load preprocessing config
 with open('New_Code/configs/preprocessing_config.json') as f:
@@ -40,11 +40,18 @@ class Dataset(BaseDataset):
         # Convert mask to binary segmentation mask
         binary_mask = (mask > 0).astype(np.uint8)
         
-        # Convert mask values to class labels
-        mask_class = (mask // 15)  # Assuming mask values are wound_class * 15
         
+        # plt.imshow(binary_mask, cmap='gray')
+        # plt.title(f"Binary Mask for image index {ind}")
+        # plt.show()
+
+
+
+        # Convert mask values to class labels
+        mask_classes = (mask // 15)  # Assuming mask values are wound_class * 15
+
         # Filter out background (class 0) and get non-background classes
-        non_background_pixels = mask_class[mask_class != 0]
+        non_background_pixels = mask_classes[mask_classes != 0]
         
         if len(non_background_pixels) > 0:
             # Determine the most frequent non-background class in the mask
@@ -54,11 +61,13 @@ class Dataset(BaseDataset):
             dominant_class = 0
         
 
-        # Convert to tensor
+        # Convert to tensor 
+        #note that Kornia permutes the images directly, no need to manually permute
+        
         image = K.image_to_tensor(image).float().to(DEVICE)
         binary_mask = K.image_to_tensor(binary_mask).long().to(DEVICE)  # Binary mask for segmentation
-        mask_class = K.image_to_tensor(mask_class).long().to(DEVICE)  # Class-specific mask
-        
+        mask_classes = K.image_to_tensor(mask_classes).long().to(DEVICE)  # Class-specific mask
+
 
 
         # Apply augmentations if necessary
@@ -68,7 +77,7 @@ class Dataset(BaseDataset):
         if self.augmentation == 'validation':
             image, binary_mask = ValidationAugmentation(self.target_size).augment(image, binary_mask)
 
-        return image, binary_mask, mask_class, dominant_class
+        return image, binary_mask, mask_classes, dominant_class
     
 
     def __len__(self):

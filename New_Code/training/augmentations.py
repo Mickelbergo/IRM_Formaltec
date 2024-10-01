@@ -3,7 +3,7 @@ from torchvision.transforms import v2
 import torch
 import torchvision.transforms.functional as F
 import matplotlib.pyplot as plt
-
+import numpy as np
 import cv2
 import torch
 
@@ -45,6 +45,14 @@ class Augmentation:
 
         # Normalize the image (but not the mask)
         image = self.normalize(image)
+
+        # mask = mask.permute(1,2,0)
+        # plt.imshow(mask, cmap = 'gray')
+        # plt.show()
+
+        # image = image.permute(1,2,0)
+        # plt.imshow(image, cmap = 'gray')
+        # plt.show()
 
         return image, mask
 

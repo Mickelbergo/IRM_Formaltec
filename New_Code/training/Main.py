@@ -9,7 +9,7 @@ import torch.nn.functional as F
 import matplotlib.pyplot as plt
 from Preprocessing import Dataset
 from Epochs import TrainEpoch, ValidEpoch
-from Model import UNetWithClassification
+from model import UNetWithClassification
 from preprocessing_memory import Memory_dataset
 
 
