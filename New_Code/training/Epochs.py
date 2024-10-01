@@ -24,6 +24,7 @@ class Epoch:
         self.classification_loss_fn.to(self.device)
 
     # Main method that runs through the dataset and processes batches
+
     def run(self, dataloader):
         self.on_epoch_start()
 
@@ -32,38 +33,49 @@ class Epoch:
         accs = []
         iou_scores = []
         
+
         with tqdm(dataloader, desc=self.stage_name, file=sys.stdout, disable=not self.verbose) as iterator:
-            for x, mask, mask_classes, _ in iterator:
+            for batch_idx, (x, mask, mask_classes, _) in enumerate(iterator):  # Added batch_idx to track the batch index
                 x, mask, mask_classes = x.to(self.device), mask.to(self.device), mask_classes.to(self.device)
                 
-                # Flatten the mask to remove any unnecessary dimensions
-                
-                mask = mask.squeeze(1)
+                # Squeeze the mask to remove the singleton dimension
+                mask = mask.squeeze(1)  # Now mask is [Batch, 640, 640]
 
                 # Process the batch and calculate the loss
                 loss, y_pred, class_pred = self.batch_update(x, mask, mask_classes)
 
-                # Display the image
-                maskk = mask
-                plt.subplot(1, 2, 1)
-                plt.imshow(maskk[0], cmap='gray')
-                plt.title('mask')
-                plt.axis('off')
-                
-                pred = y_pred.argmax(dim=1)
-                # Display the corresponding mask
-                plt.subplot(1, 2, 2)
-                plt.imshow(pred[0], cmap='gray')
-                plt.title('pred')
-                plt.axis('off')
-                
-                plt.draw()
-                plt.pause(0.001)
+                # Convert predicted mask to single-channel by taking argmax
+                pred_mask = y_pred.argmax(dim=1)  # Now pred_mask is [Batch, 640, 640]
+
+                # Only display every 10th batch to avoid showing images too frequently
+                if batch_idx % 10 == 0:  # Show every 10 batches
+                    # Display the ground truth mask and prediction for the first image in the batch
+
+                    clipped_image = torch.clip(x[0].permute(1, 2, 0).cpu(), 0, 1)
+                    clipped_image_np = clipped_image.numpy()
+                    plt.subplot(1, 3, 1)
+                    plt.imshow(clipped_image_np)
+                    plt.title('Original Image')
+                    plt.axis('off')
+
+                    plt.subplot(1, 3, 2)
+                    plt.imshow(mask[0].cpu().numpy(), cmap='gray')  # Ground truth mask
+                    plt.title('Ground Truth Mask')
+                    plt.axis('off')
+
+                    plt.subplot(1, 3, 3)
+                    plt.imshow(pred_mask[0].cpu().numpy(), cmap='gray')  # Predicted mask
+                    plt.title('Predicted Mask')
+                    plt.axis('off')
+
+                   
+                    plt.draw()  # Draw the updated figure without blocking
+                    plt.pause(0.2)  # Small pause to allow the plot to update
 
                 # Record loss, accuracy, and IoU for the batch
                 losses.append(loss.item())
-                acc = (y_pred.argmax(dim=1) == mask).float().mean().item()
-                iou_score = self.calculate_iou(y_pred.argmax(dim=1), mask)
+                acc = (pred_mask == mask).float().mean().item()  # Accuracy
+                iou_score = self.calculate_iou(pred_mask, mask)  # IoU calculation
 
                 accs.append(acc)
                 iou_scores.append(iou_score)
@@ -92,6 +104,7 @@ class TrainEpoch(Epoch):
     def __init__(self, model, BCE_LOSS, DICE_Loss = None,  classification_loss_fn = None , optimizer = None, device=None, verbose=True):
         super().__init__(model, BCE_LOSS, DICE_Loss, classification_loss_fn, stage_name='train', device=device, verbose=verbose)
         self.optimizer = optimizer
+        self.grad_clip_value = 1.0
 
     # Set the model to training mode at the start of each epoch
     def on_epoch_start(self):
@@ -121,6 +134,8 @@ class TrainEpoch(Epoch):
         loss = seg_loss + 0 #class_loss
         loss.backward()
 
+        torch.nn.utils.clip_grad_norm_(self.model.parameters(), self.grad_clip_value)
+        
         # Update the model's parameters
         self.optimizer.step()
         
