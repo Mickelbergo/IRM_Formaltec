@@ -6,7 +6,7 @@ import sys
 import matplotlib.pyplot as plt
 
 class Epoch:
-    def __init__(self, model, BCE_LOSS, DICE_Loss, classification_loss_fn, stage_name, device=None, verbose=True):
+    def __init__(self, model, BCE_LOSS, DICE_Loss, classification_loss_fn, stage_name, device=None, display_image = False, verbose=True):
         self.model = model
         self.BCE_LOSS = BCE_LOSS
         self.DICE_Loss = DICE_Loss
@@ -14,6 +14,7 @@ class Epoch:
         self.stage_name = stage_name
         self.verbose = verbose
         self.device = device
+        self.display_image = display_image
         self._to_device()
 
     # Move model and loss functions to the specified device (GPU or CPU)
@@ -23,8 +24,35 @@ class Epoch:
         self.DICE_Loss.to(self.device)
         self.classification_loss_fn.to(self.device)
 
-    # Main method that runs through the dataset and processes batches
 
+    def display_images(self, image, ground_truth, prediction_mask):
+
+        # Display the original image, ground truth mask and prediction for the first image in the batch
+
+        clipped_image = torch.clip(image[0].permute(1, 2, 0).cpu(), 0, 1)
+        clipped_image_np = clipped_image.numpy()
+        plt.subplot(1, 3, 1)
+        plt.imshow(clipped_image_np)
+        plt.title('Original Image')
+        plt.axis('off')
+
+        plt.subplot(1, 3, 2)
+        plt.imshow(ground_truth[0].cpu().numpy(), cmap='gray')  # Ground truth mask
+        plt.title('Ground Truth Mask')
+        plt.axis('off')
+
+        plt.subplot(1, 3, 3)
+        plt.imshow(prediction_mask[0].cpu().numpy(), cmap='gray')  # Predicted mask
+        plt.title('Predicted Mask')
+        plt.axis('off')
+
+        
+        plt.draw()  # Draw the updated figure without blocking
+        plt.pause(0.2)  # Small pause to allow the plot to update
+
+
+
+    # Main method that runs through the dataset and processes batches
     def run(self, dataloader):
         self.on_epoch_start()
 
@@ -47,30 +75,9 @@ class Epoch:
                 # Convert predicted mask to single-channel by taking argmax
                 pred_mask = y_pred.argmax(dim=1)  # Now pred_mask is [Batch, 640, 640]
 
-                # Only display every 10th batch to avoid showing images too frequently
-                if batch_idx % 10 == 0:  # Show every 10 batches
-                    # Display the ground truth mask and prediction for the first image in the batch
+                if self.display_image == True and batch_idx % 10 == 0:
+                    self.display_images(x, mask, pred_mask)
 
-                    clipped_image = torch.clip(x[0].permute(1, 2, 0).cpu(), 0, 1)
-                    clipped_image_np = clipped_image.numpy()
-                    plt.subplot(1, 3, 1)
-                    plt.imshow(clipped_image_np)
-                    plt.title('Original Image')
-                    plt.axis('off')
-
-                    plt.subplot(1, 3, 2)
-                    plt.imshow(mask[0].cpu().numpy(), cmap='gray')  # Ground truth mask
-                    plt.title('Ground Truth Mask')
-                    plt.axis('off')
-
-                    plt.subplot(1, 3, 3)
-                    plt.imshow(pred_mask[0].cpu().numpy(), cmap='gray')  # Predicted mask
-                    plt.title('Predicted Mask')
-                    plt.axis('off')
-
-                   
-                    plt.draw()  # Draw the updated figure without blocking
-                    plt.pause(0.2)  # Small pause to allow the plot to update
 
                 # Record loss, accuracy, and IoU for the batch
                 losses.append(loss.item())
@@ -101,10 +108,10 @@ class Epoch:
 
 # Training epoch class
 class TrainEpoch(Epoch):
-    def __init__(self, model, BCE_LOSS, DICE_Loss = None,  classification_loss_fn = None , optimizer = None, device=None, verbose=True):
-        super().__init__(model, BCE_LOSS, DICE_Loss, classification_loss_fn, stage_name='train', device=device, verbose=verbose)
+    def __init__(self, model, BCE_LOSS, DICE_Loss = None,  classification_loss_fn = None , optimizer = None, device=None, grad_clip_value = 1.0, display_image = False, verbose=True):
+        super().__init__(model, BCE_LOSS, DICE_Loss, classification_loss_fn, stage_name='train', device=device, display_image = display_image,  verbose=verbose)
         self.optimizer = optimizer
-        self.grad_clip_value = 1.0
+        self.grad_clip_value = grad_clip_value
 
     # Set the model to training mode at the start of each epoch
     def on_epoch_start(self):
@@ -143,8 +150,8 @@ class TrainEpoch(Epoch):
 
 # Validation epoch class
 class ValidEpoch(Epoch):
-    def __init__(self, model, BCE_LOSS, DICE_Loss = None,  classification_loss_fn = None, device=None, verbose=True):
-        super().__init__(model, BCE_LOSS, DICE_Loss, classification_loss_fn, stage_name='valid', device=device, verbose=verbose)
+    def __init__(self, model, BCE_LOSS, DICE_Loss = None,  classification_loss_fn = None, device=None, display_image = False, verbose=True):
+        super().__init__(model, BCE_LOSS, DICE_Loss, classification_loss_fn, stage_name='valid', device=device, display_image= display_image, verbose=verbose)
 
     # Set the model to evaluation mode at the start of each epoch
     def on_epoch_start(self):

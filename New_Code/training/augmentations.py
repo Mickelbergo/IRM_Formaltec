@@ -27,8 +27,11 @@ class Augmentation:
         if not isinstance(mask, torch.Tensor):
             raise TypeError("Mask should be a tensor")
 
+
+        image = image / 255.0 #convert to float image
+
+
         # Get the parameters for RandomResizedCrop (apply same params to both image and mask)
-        image = image / 255.0
         params = v2.RandomResizedCrop.get_params(image, scale=(1.0, 1.0), ratio=(1.0, 1.0))
         
         # Apply RandomResizedCrop to both image and mask using the same parameters
@@ -77,7 +80,9 @@ class ValidationAugmentation:
         if not isinstance(mask, torch.Tensor):
             raise TypeError("Mask should be a tensor")
         
-        image = image/255.0
+        image = image/255.0 #convert to float image
+
+        
         # Resize both image and mask (without randomness)
         image = self.transforms(image)
         mask = self.transforms(mask)

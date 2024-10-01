@@ -1,11 +1,11 @@
 {
-    "device": "cuda",
-    "path": "E:/ForMalTeC/Wound_segmentation_III/Data",
+    "device": "cpu",
+    "path": "C:/users/comi/Desktop/Wound_segmentation_III/Data",
     "model_version": "v1.0",
     "encoder": "resnet50",
     "encoder_weights": "imagenet",
     "activation": "sigmoid",
-    "batch_size": 8,
+    "batch_size": 1,
     "num_epochs": 150,
     "optimizer_lr": 0.0001,
     "optimizer": "adam",
@@ -15,5 +15,7 @@
     "segmentation_classes": 2,
     "classification_classes": 15,
     "class_weights": [0.01,0.99],
-    "dice": true
+    "dice": true,
+    "grad_clip_value": 1.0,
+    "display_image": "True"
 }

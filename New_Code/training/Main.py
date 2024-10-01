@@ -14,8 +14,7 @@ from preprocessing_memory import Memory_dataset
 
 
 def main():
-
-
+    
     print(f"Cuda Available: {torch.cuda.is_available()}")
 
 
@@ -67,8 +66,8 @@ def main():
         target_size= tuple(preprocessing_config["target_size"])
     )
 
-    train_loader = DataLoader(train_dataset, batch_size=train_config["batch_size"], shuffle=True, num_workers= 0)
-    valid_loader = DataLoader(valid_dataset, batch_size=train_config["batch_size"], shuffle=False, num_workers=0)
+    train_loader = DataLoader(train_dataset, batch_size=train_config["batch_size"], shuffle=True, num_workers= 3)
+    valid_loader = DataLoader(valid_dataset, batch_size=train_config["batch_size"], shuffle=False, num_workers=3)
 
     # Define model
     model = UNetWithClassification(
@@ -93,8 +92,13 @@ def main():
     classification_loss_fn = nn.CrossEntropyLoss() # Classification loss
 
     # Define training and validation epochs
-    train_epoch = TrainEpoch(model, BCE_Loss, DICE_Loss, classification_loss_fn, optimizer, device=DEVICE)
-    valid_epoch = ValidEpoch(model, BCE_Loss, DICE_Loss, classification_loss_fn, device=DEVICE)
+
+    if train_config["display_image"] == "True":
+        display_image = True
+    else: display_image = False
+
+    train_epoch = TrainEpoch(model, BCE_Loss, DICE_Loss, classification_loss_fn, optimizer, device=DEVICE, grad_clip_value = train_config["grad_clip_value"], display_image = display_image)
+    valid_epoch = ValidEpoch(model, BCE_Loss, DICE_Loss, classification_loss_fn, device=DEVICE, display_image = display_image)
 
     # Training loop
     max_score = 0
