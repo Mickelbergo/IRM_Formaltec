@@ -90,7 +90,7 @@ class ValidationAugmentation:
         # Normalize the image (but not the mask)
         image = self.normalize(image)
 
-        return image, mask
+        return image, mask.long()
 
 ################################## DEPRECATED ##################################################
 

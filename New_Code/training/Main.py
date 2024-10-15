@@ -16,7 +16,7 @@ from preprocessing_memory import Memory_dataset
 def main():
     
     print(f"Cuda Available: {torch.cuda.is_available()}")
-
+    torch.backends.cudnn.enabled = True
 
     # Load configurations
     with open('New_Code/configs/training_config.json') as f:
@@ -40,6 +40,7 @@ def main():
     image_ids = sorted([f for f in os.listdir(image_dir) if f.lower().endswith(valid_extensions)])
 
     # Shuffle and split the dataset into training and validation sets
+    
     random.seed(42)  # For reproducibility
     random.shuffle(image_ids)
 
@@ -66,8 +67,8 @@ def main():
         target_size= tuple(preprocessing_config["target_size"])
     )
 
-    train_loader = DataLoader(train_dataset, batch_size=train_config["batch_size"], shuffle=True, num_workers= 3)
-    valid_loader = DataLoader(valid_dataset, batch_size=train_config["batch_size"], shuffle=False, num_workers=3)
+    train_loader = DataLoader(train_dataset, batch_size=train_config["batch_size"], shuffle=True, num_workers= 4)
+    valid_loader = DataLoader(valid_dataset, batch_size=train_config["batch_size"], shuffle=False, num_workers=0)
 
     # Define model
     model = UNetWithClassification(
@@ -85,6 +86,7 @@ def main():
     class_weights = torch.tensor(train_config["class_weights"]).to(DEVICE)
 
     BCE_Loss = nn.CrossEntropyLoss(weight = class_weights)
+
     if train_config["dice"]:
         DICE_Loss = smp.losses.DiceLoss(mode = "multiclass")
     #Segmentation loss function is either only weight BCE or weighted BCE + DICE

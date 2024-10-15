@@ -20,7 +20,7 @@ def main():
     print(f"Using device: {device}")
 
     # Paths
-    model_path = r'C:\Users\comi\Desktop\Wound_segmentation_III\Data\best_model_v1.0.pth'  # Adjust if necessary
+    model_path = r'C:\Users\comi\Desktop\Wound_segmentation_III\Data\best_model_v1.1.pth'  # Adjust if necessary
     image_dir = r'C:\Users\comi\Desktop\Wound_segmentation_III\Data\example_images'
     output_dir = r'C:\Users\comi\Desktop\Wound_segmentation_III\Data\example_images_segmented'
 
@@ -58,8 +58,7 @@ def main():
     preprocess = transforms.Compose([
         transforms.Resize((height, width)),
         transforms.ToTensor(),
-        # Include normalization if used during training
-        # transforms.Normalize(mean=preprocessing_config["mean"], std=preprocessing_config["std"])
+        transforms.Normalize(mean=preprocessing_config["mean"], std=preprocessing_config["std"])
     ])
 
     print(f"Preprocessing transformations: {preprocess}")
@@ -106,10 +105,21 @@ def main():
             predicted_mask = torch.argmax(segmentation_output, dim=1)  # Shape: [batch_size, H, W]
             predicted_mask = predicted_mask.squeeze(0).cpu().numpy()    # Remove batch dimension
 
-            plt.imshow(predicted_mask, cmap='gray')
-            plt.title('Predicted Mask')
-            plt.show()
+
+
+
+
+
+            #if you want to dispaly the predicted masks ############################
+
+            # plt.imshow(predicted_mask, cmap='gray')
+            # plt.title('Predicted Mask')
+            # plt.show()
             # Ensure predicted_mask is of type uint8
+
+
+
+
             predicted_mask = predicted_mask.astype(np.uint8)
 
             print(f"Predicted mask shape: {predicted_mask.shape}")
