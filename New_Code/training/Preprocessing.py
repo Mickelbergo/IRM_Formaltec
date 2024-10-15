@@ -35,23 +35,14 @@ class Dataset(BaseDataset):
         if image is None or mask is None:
             raise ValueError("mask is none")
 
-        #image, mask = resize_and_pad(image, mask, self.target_size)
-
         # Convert mask to binary segmentation mask
         binary_mask = (mask > 0).astype(np.uint8)
         
-        
-        # plt.imshow(binary_mask, cmap='gray')
-        # plt.title(f"Binary Mask for image index {ind}")
-        # plt.show()
-
-
-
         # Convert mask values to class labels
-        mask_classes = (mask // 15)  # Assuming mask values are wound_class * 15
+        multiclass_mask = (mask // 15)  # Assuming mask values are wound_class * 15
 
         # Filter out background (class 0) and get non-background classes
-        non_background_pixels = mask_classes[mask_classes != 0]
+        non_background_pixels = multiclass_mask[multiclass_mask != 0]
         
         if len(non_background_pixels) > 0:
             # Determine the most frequent non-background class in the mask
@@ -63,21 +54,24 @@ class Dataset(BaseDataset):
 
         # Convert to tensor 
         #note that Kornia permutes the images directly, no need to manually permute
-        
         image = K.image_to_tensor(image).float().to(DEVICE)
         binary_mask = K.image_to_tensor(binary_mask).long().to(DEVICE)  # Binary mask for segmentation
-        mask_classes = K.image_to_tensor(mask_classes).long().to(DEVICE)  # Class-specific mask
+        multiclass_mask = K.image_to_tensor(multiclass_mask).long().to(DEVICE)  # Multiclass segmentation
 
 
 
-        # Apply augmentations if necessary
+        # Apply augmentations
         if self.augmentation == 'train':
-            image, binary_mask = Augmentation(self.target_size).augment(image, binary_mask)
+            if preprocessing_config["segmentation"] == "binary":
+                image, binary_mask = Augmentation(self.target_size).augment(image, binary_mask)
+            else: image, multiclass_mask = Augmentation(self.target_size).augment(image, multiclass_mask)
         
         if self.augmentation == 'validation':
-            image, binary_mask = ValidationAugmentation(self.target_size).augment(image, binary_mask)
+            if preprocessing_config["segmentation"] == "binary":
+                image, binary_mask = ValidationAugmentation(self.target_size).augment(image, binary_mask)
+            else: image, multiclass_mask = Augmentation(self.target_size).augment(image, multiclass_mask)
 
-        return image, binary_mask, mask_classes, dominant_class
+        return image, binary_mask, multiclass_mask, dominant_class
     
 
     def __len__(self):

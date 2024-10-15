@@ -6,11 +6,11 @@ import sys
 import matplotlib.pyplot as plt
 
 class Epoch:
-    def __init__(self, model, BCE_LOSS, DICE_Loss, classification_loss_fn, stage_name, device=None, display_image = False, verbose=True):
+    def __init__(self, model, CE_Loss, DICE_Loss, segmentation, stage_name, device=None, display_image = False, verbose=True):
         self.model = model
-        self.BCE_LOSS = BCE_LOSS
+        self.CE_Loss = CE_Loss
         self.DICE_Loss = DICE_Loss
-        self.classification_loss_fn = classification_loss_fn
+        self.segmentation = segmentation
         self.stage_name = stage_name
         self.verbose = verbose
         self.device = device
@@ -20,9 +20,8 @@ class Epoch:
     # Move model and loss functions to the specified device (GPU or CPU)
     def _to_device(self):
         self.model.to(self.device)
-        self.BCE_LOSS.to(self.device)
+        self.CE_Loss.to(self.device)
         self.DICE_Loss.to(self.device)
-        self.classification_loss_fn.to(self.device)
 
 
     def display_images(self, image, ground_truth, prediction_mask):
@@ -63,14 +62,20 @@ class Epoch:
         
 
         with tqdm(dataloader, desc=self.stage_name, file=sys.stdout, disable=not self.verbose) as iterator:
-            for batch_idx, (x, mask, mask_classes, _) in enumerate(iterator):  # Added batch_idx to track the batch index
-                x, mask, mask_classes = x.to(self.device), mask.to(self.device), mask_classes.to(self.device)
+            for batch_idx, (x, binary_mask, multiclass_mask, _) in enumerate(iterator): 
+                x, binary_mask, multiclass_mask = x.to(self.device), binary_mask.to(self.device), multiclass_mask.to(self.device)
                 
-                # Squeeze the mask to remove the singleton dimension
-                mask = mask.squeeze(1)  # Now mask is [Batch, 640, 640]
+                if self.segmentation == "binary":
+                    # Squeeze the mask to remove the singleton dimension
+                    mask = binary_mask.squeeze(1)  # Now mask is [Batch, 640, 640]
 
-                # Process the batch and calculate the loss
-                loss, y_pred, class_pred = self.batch_update(x, mask, mask_classes)
+                    # Process the batch and calculate the loss
+                    loss, y_pred = self.batch_update(x, mask)
+
+                else:
+                    mask = multiclass_mask.squeeze(1)
+                    loss, y_pred = self.batch_update(x, mask)
+
 
                 # Convert predicted mask to single-channel by taking argmax
                 pred_mask = y_pred.argmax(dim=1)  # Now pred_mask is [Batch, 640, 640]
@@ -108,8 +113,8 @@ class Epoch:
 
 # Training epoch class
 class TrainEpoch(Epoch):
-    def __init__(self, model, BCE_LOSS, DICE_Loss = None,  classification_loss_fn = None , optimizer = None, device=None, grad_clip_value = 1.0, display_image = False, verbose=True):
-        super().__init__(model, BCE_LOSS, DICE_Loss, classification_loss_fn, stage_name='train', device=device, display_image = display_image,  verbose=verbose)
+    def __init__(self, model, CE_Loss, DICE_Loss = None, segmentation = "binary", optimizer = None, device=None, grad_clip_value = 1.0, display_image = False, verbose=True):
+        super().__init__(model, CE_Loss, DICE_Loss, segmentation, stage_name='train', device=device, display_image = display_image,  verbose=verbose)
         self.optimizer = optimizer
         self.grad_clip_value = grad_clip_value
 
@@ -118,14 +123,14 @@ class TrainEpoch(Epoch):
         self.model.train()
 
     # Process a single batch and update the model's parameters
-    def batch_update(self, x, mask, mask_class):
+    def batch_update(self, x, mask):
         self.optimizer.zero_grad()
 
         # Forward pass through the model
-        y_pred, class_pred = self.model(x)
+        y_pred = self.model(x)
 
         # Calculate segmentation loss
-        seg_loss = self.BCE_LOSS(y_pred, mask)
+        seg_loss = self.CE_Loss(y_pred, mask)
 
         #also incorporate dice loss
         if self.DICE_Loss != None:
@@ -134,11 +139,7 @@ class TrainEpoch(Epoch):
 
         seg_loss = seg_loss + seg_loss2
         
-
-        ##not used at the moment
-        #class_loss = self.classification_loss_fn(class_pred, mask_class)
-
-        loss = seg_loss + 0 #class_loss
+        loss = seg_loss
         loss.backward()
 
         torch.nn.utils.clip_grad_norm_(self.model.parameters(), self.grad_clip_value)
@@ -146,25 +147,25 @@ class TrainEpoch(Epoch):
         # Update the model's parameters
         self.optimizer.step()
         
-        return loss, y_pred, class_pred
+        return loss, y_pred
 
 # Validation epoch class
 class ValidEpoch(Epoch):
-    def __init__(self, model, BCE_LOSS, DICE_Loss = None,  classification_loss_fn = None, device=None, display_image = False, verbose=True):
-        super().__init__(model, BCE_LOSS, DICE_Loss, classification_loss_fn, stage_name='valid', device=device, display_image= display_image, verbose=verbose)
+    def __init__(self, model, CE_Loss, DICE_Loss = None, segmentation = "binary", device=None, display_image = False, verbose=True):
+        super().__init__(model, CE_Loss, DICE_Loss, segmentation, stage_name='valid', device=device, display_image= display_image, verbose=verbose)
 
     # Set the model to evaluation mode at the start of each epoch
     def on_epoch_start(self):
         self.model.eval()
 
     # Process a single batch without updating the model's parameters
-    def batch_update(self, x, mask, mask_class):
+    def batch_update(self, x, mask):
         with torch.no_grad():
             # Forward pass through the model
-            y_pred, class_pred = self.model(x)
+            y_pred= self.model(x)
 
             # Calculate segmentation loss
-            seg_loss = self.BCE_LOSS(y_pred, mask)
+            seg_loss = self.CE_Loss(y_pred, mask)
 
             if self.DICE_Loss != None:
                 seg_loss2 = self.DICE_Loss(y_pred, mask)
@@ -172,9 +173,6 @@ class ValidEpoch(Epoch):
 
             seg_loss = seg_loss + seg_loss2
 
-
-            #class_loss = self.classification_loss_fn(class_pred, mask_class)
-
-            loss = seg_loss + 0 # class_loss
+            loss = seg_loss
         
-        return loss, y_pred, class_pred
+        return loss, y_pred

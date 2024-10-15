@@ -1,5 +1,5 @@
 {
-    "device": "cuda",
+    "device": "cpu",
     "path": "C:/users/comi/Desktop/Wound_segmentation_III/Data",
     "model_version": "v1.1",
     "encoder": "resnet101",
@@ -12,10 +12,10 @@
     "lr_scheduler_gamma": 0.9,
     "loss": "cross_entropy",
     "metrics": ["accuracy", "iou_score"],
-    "segmentation_classes": 2,
-    "classification_classes": 15,
+    "segmentation_classes": 14,
     "class_weights": [0.01,0.99],
     "dice": true,
     "grad_clip_value": 1.0,
-    "display_image": "False"
+    "display_image": "False",
+    "num_workers": 0
 }
