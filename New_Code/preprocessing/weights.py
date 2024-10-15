@@ -6,7 +6,7 @@ import json
 import torch
 import random
 import sys
-preprocess_path = "C:/users/comi/Desktop/Wound_segmentation_III/GIT/IRM_Formaltec/New_Code/training"
+preprocess_path = "E:/ForMalTeC/Wound_segmentation_III/GIT/IRM_Formaltec/New_Code/training"
 sys.path.append(preprocess_path)
 from Preprocessing import Dataset
 

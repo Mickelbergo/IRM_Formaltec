@@ -11,7 +11,7 @@ from Preprocessing import Dataset
 from Epochs import TrainEpoch, ValidEpoch
 from model import UNetWithClassification
 from preprocessing_memory import Memory_dataset
-from weights import calculate_class_distribution, calculate_class_weights, plot_class_distribution
+
 def main():
 
     # Load configurations
@@ -115,7 +115,7 @@ def main():
         # Save best model
         if valid_logs['iou_score'] > max_score:
             max_score = valid_logs['iou_score']
-            torch.save(model, os.path.join(path, f"best_model_{model_version}.pth"))
+            torch.save(model, os.path.join(path, f"best_model_{model_version}_{epoch}_{train_config["encoder"]}.pth"))
             print("Best model saved!")
         
         # Update learning rate
@@ -127,7 +127,7 @@ def main():
         print(f"Train IoU: {train_logs['iou_score']:.4f}, Valid IoU: {valid_logs['iou_score']:.4f}")
 
     # Save the final model
-    torch.save(model, os.path.join(path, f"final_model_{model_version}.pth"))
+    torch.save(model, os.path.join(path, f"final_model_{model_version}_{train_config["num_epochs"]}_{train_config["encoder"]}.pth"))
     print("Final model saved!")
 
 if __name__ == "__main__":
