@@ -14,8 +14,9 @@ import matplotlib.pyplot as plt
 with open('New_Code/configs/preprocessing_config.json') as f:
     preprocessing_config = json.load(f)
 
-DEVICE = torch.device(preprocessing_config["device"])
 
+#DEVICE = torch.device(preprocessing_config["device"])
+DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
 class Dataset(BaseDataset):
     def __init__(self, dir_path, image_ids, mask_ids, augmentation=None, target_size=(640, 640)):
         self.image_ids = image_ids
@@ -40,6 +41,8 @@ class Dataset(BaseDataset):
         
         # Convert mask values to class labels
         multiclass_mask = (mask // 15)  # Assuming mask values are wound_class * 15
+        
+        print(np.unique(multiclass_mask))
 
         # Filter out background (class 0) and get non-background classes
         non_background_pixels = multiclass_mask[multiclass_mask != 0]

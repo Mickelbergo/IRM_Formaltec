@@ -1,6 +1,6 @@
 {
     "device": "cuda",
-    "path": "E:/ForMalTeC/Wound_segmentation_III/Data",
+    "path": "C:/users/comi/Desktop/Wound_segmentation_III/Data",
     "model_version": "v1.2",
     "encoder": "resnet101",
     "encoder_weights": "imagenet",
