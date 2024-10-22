@@ -1,6 +1,6 @@
-#my PC: "C:/users/comi/Desktop/Wound_segmentation_III/Data"
-#train PC: "E:/ForMalTeC/Wound_segmentation_III/Data"
-#train PC2: "C/users/Desktop/Wound_segmentation_III/Data
+#my PC: "C:/users/comi/Desktop/Wound_segmentation_III/Data" "C:/Users/comi/Desktop/Wound_Segmentation_III/GIT/IRM_Formaltec/New_Code/training"
+#train PC: "E:/ForMalTeC/Wound_segmentation_III/Data" "E:/ForMaLTeC/Wound_segmentation_III/GIT/IRM_Formaltec/New_Code/training"
+#train PC2: "C/users/Desktop/Wound_segmentation_III/Data "C:/Users/comi/Desktop/Wound_Segmentation_III/IRM_Formaltec/New_Code/training"
 
 
 to change to binary segmentation, change: 

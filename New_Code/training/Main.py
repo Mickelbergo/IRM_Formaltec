@@ -83,7 +83,7 @@ def main():
     # Define optimizer, loss, and scheduler
     optimizer = torch.optim.Adam(model.parameters(), lr=train_config["optimizer_lr"])
     scheduler = torch.optim.lr_scheduler.ExponentialLR(optimizer, gamma=train_config["lr_scheduler_gamma"])
-
+    encoder = train_config["encoder"]
     # Define the type of segmentation, the corresponding loss function and the weights
     segmentation = preprocessing_config["segmentation"] #either 'binary' or 'multiclass'
     class_weights_multiclass = torch.load(os.path.join(path, "class_weights.pth")).float().to(DEVICE)
@@ -120,7 +120,7 @@ def main():
         # Save best model
         if valid_logs['iou_score'] > max_score:
             max_score = valid_logs['iou_score']
-            torch.save(model, os.path.join(path, f"best_model_{model_version}_{epoch}_{train_config["encoder"]}.pth"))
+            torch.save(model, os.path.join(path, f"best_model_{model_version}_{epoch}_{encoder}.pth"))
             print("Best model saved!")
         
         # Update learning rate
@@ -132,7 +132,7 @@ def main():
         print(f"Train IoU: {train_logs['iou_score']:.4f}, Valid IoU: {valid_logs['iou_score']:.4f}")
 
     # Save the final model
-    torch.save(model, os.path.join(path, f"final_model_{model_version}_{train_config["num_epochs"]}_{train_config["encoder"]}.pth"))
+    torch.save(model, os.path.join(path, f"final_model_{model_version}_{150}_{encoder}.pth"))
     print("Final model saved!")
 
 if __name__ == "__main__":
