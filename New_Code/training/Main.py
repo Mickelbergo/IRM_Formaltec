@@ -9,9 +9,11 @@ import torch.nn.functional as F
 import matplotlib.pyplot as plt
 from Preprocessing import Dataset
 from Epochs import TrainEpoch, ValidEpoch
-from model import UNetWithClassification
+from model import UNetWithClassification, UNetWithSwinTransformer
 from preprocessing_memory import Memory_dataset
 
+import ssl
+ssl._create_default_https_context = ssl._create_unverified_context
 def main():
 
     # Load configurations
@@ -67,12 +69,15 @@ def main():
     valid_loader = DataLoader(valid_dataset, batch_size=train_config["batch_size"], shuffle=False, num_workers= train_config["num_workers"])
 
     # Define model
-    model = UNetWithClassification(
-        encoder_name=train_config["encoder"],
-        encoder_weights=train_config["encoder_weights"],
-        classes= train_config["segmentation_classes"],  # Segmentation classes (e.g., wound vs. background),  # Replace with the actual number of wound classes
-        activation=train_config["activation"]
-    )
+    if train_config["encoder"] == "transformer": #using SWIN transformer from huggingface with pretrained weights
+        model = UNetWithSwinTransformer(classes = train_config["segmentation_classes"], activation = train_config["activation"])
+    else:
+        model = UNetWithClassification(
+            encoder_name=train_config["encoder"],
+            encoder_weights=train_config["encoder_weights"],
+            classes= train_config["segmentation_classes"],  # Segmentation classes (e.g., wound vs. background),  # Replace with the actual number of wound classes
+            activation=train_config["activation"]
+        )
     model = model.to(DEVICE)
 
     # Define optimizer, loss, and scheduler

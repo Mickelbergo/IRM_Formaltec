@@ -60,7 +60,7 @@ class Dataset(BaseDataset):
         binary_mask = K.image_to_tensor(binary_mask).long().to(DEVICE)  # Binary mask for segmentation
         multiclass_mask = K.image_to_tensor(multiclass_mask).long().to(DEVICE)  # Multiclass segmentation
 
-        self.visualize_sample(image, multiclass_mask, binary_mask)
+        #self.visualize_sample(image, multiclass_mask, binary_mask)
 
 
         # Apply augmentations
