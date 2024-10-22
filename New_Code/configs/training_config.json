@@ -1,7 +1,7 @@
 {
     "device": "cuda",
     "path": "C:/users/comi/Desktop/Wound_segmentation_III/Data",
-    "preprocess_path": "C:/Users/comi/Desktop/Wound_Segmentation_III/IRM_Formaltec/New_Code/training",
+    "preprocess_path": "C:/Users/comi/Desktop/Wound_Segmentation_III/GIT/IRM_Formaltec/New_Code/training",
     "model_version": "v1.2",
     "encoder": "resnet101",
     "encoder_weights": "imagenet",
@@ -18,5 +18,5 @@
     "dice": true,
     "grad_clip_value": 1.0,
     "display_image": "False",
-    "num_workers": 3
+    "num_workers": 0
 }

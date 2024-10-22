@@ -119,8 +119,8 @@ else:
     print("Calculating class weights for the whole dataset...")
     class_counts, class_distribution = calculate_class_distribution(full_dataset)
 
-    # # Plot class distribution (optional)
-    # plot_class_distribution(class_distribution)
+    # Plot class distribution (optional)
+    plot_class_distribution(class_distribution)
 
     # Calculate class weights
     total_pixels = sum(class_counts.values())
