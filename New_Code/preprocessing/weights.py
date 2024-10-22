@@ -6,7 +6,10 @@ import json
 import torch
 import random
 import sys
-preprocess_path = "E:/ForMalTeC/Wound_segmentation_III/GIT/IRM_Formaltec/New_Code/training"
+with open('New_Code/configs/training_config.json') as f:
+    train_config = json.load(f)
+preprocess_path = train_config["preprocess_path"]
+
 sys.path.append(preprocess_path)
 from Preprocessing import Dataset
 
@@ -14,25 +17,36 @@ from Preprocessing import Dataset
 def calculate_class_distribution(dataset):
     class_counts = Counter()
     total_pixels = 0
+    all_classes = set()
 
     # Iterate through dataset and count class occurrences
     for i in range(len(dataset)):
         _, _, mask_classes, _ = dataset[i]  # Get mask_classes for each image
         unique, counts = np.unique(mask_classes.cpu().numpy(), return_counts=True)
+
+        all_classes.update(unique)
+
         class_counts.update(dict(zip(unique, counts)))
         total_pixels += mask_classes.numel()
 
     # Calculate frequency of each class
     class_distribution = {cls: count / total_pixels for cls, count in class_counts.items()}
+
+    print(f'all classes found: {sorted(all_classes)}')
     return class_counts, class_distribution
 
 
-def calculate_class_weights(class_counts, total_pixels):
+def calculate_class_weights(class_counts, total_pixels, total_classes):
     # Inverse frequency weighting
     class_weights = {cls: total_pixels / (count + 1e-6) for cls, count in class_counts.items()}  # Avoid division by zero
     
     max_cap = 300  # Define the maximum weight cap
     class_weights = {cls: min(weight, max_cap) for cls, weight in class_weights.items()}
+
+    #handle missing classes
+    for classes in range(total_classes):
+        if classes not in class_weights: 
+            class_weights[classes] = 0
     return class_weights
 
 
@@ -105,12 +119,13 @@ else:
     print("Calculating class weights for the whole dataset...")
     class_counts, class_distribution = calculate_class_distribution(full_dataset)
 
-    # Plot class distribution (optional)
-    plot_class_distribution(class_distribution)
+    # # Plot class distribution (optional)
+    # plot_class_distribution(class_distribution)
 
     # Calculate class weights
     total_pixels = sum(class_counts.values())
-    class_weights = calculate_class_weights(class_counts, total_pixels)
+    total_classes = train_config["segmentation_classes"]
+    class_weights = calculate_class_weights(class_counts, total_pixels, total_classes)
 
     # Convert class weights to tensor and save them
     class_weights_tensor = torch.tensor([class_weights[cls] for cls in sorted(class_weights.keys())]).to(DEVICE)

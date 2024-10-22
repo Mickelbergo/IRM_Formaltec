@@ -42,7 +42,6 @@ class Dataset(BaseDataset):
         # Convert mask values to class labels
         multiclass_mask = (mask // 15)  # Assuming mask values are wound_class * 15
         
-        print(np.unique(multiclass_mask))
 
         # Filter out background (class 0) and get non-background classes
         non_background_pixels = multiclass_mask[multiclass_mask != 0]
