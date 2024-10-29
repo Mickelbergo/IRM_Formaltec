@@ -19,7 +19,7 @@ device = torch.device(train_config["device"] if torch.cuda.is_available() else '
 print(f"Using device: {device}")
 
 # Set paths
-model_path = os.path.join(train_config["path"], f"best_model_{train_config['model_version']}_69_resnet101.pth") #this needs to be cahnged always
+model_path = os.path.join(train_config["path"], f"best_model_{train_config['model_version']}_73_resnet101.pth") #this needs to be cahnged always
 image_dir = os.path.join(train_config["path"], "example_images")
 output_dir = os.path.join(train_config["path"], "example_images_segmented")
 

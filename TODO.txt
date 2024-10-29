@@ -1,7 +1,3 @@
-1. look at the transformer_scratch notebook on the training pc (it has not been committed yet)
-- otherwise copy back from chatgpt
+1. fix the swin transformer architecture (might add some new layers, or some skip connections, look at chatgpt from last week)
 
-
-2. the trained model with iou of 0.5 only predicts background ;( 
-
-    
+2. refine object detection -> train a object detection model instead of just using a pretrained one

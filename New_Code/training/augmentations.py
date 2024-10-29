@@ -37,18 +37,18 @@ class Augmentation:
         if train_config["object_detection"] == "False":
 
             # Get the parameters for RandomResizedCrop (apply same params to both image and mask)
-            # params = v2.RandomResizedCrop.get_params(image, scale=(1.0, 1.0), ratio=(1.0, 1.0))
+            params = v2.RandomResizedCrop.get_params(image, scale=(1.0, 1.0), ratio=(1.0, 1.0))
             
-            # # Apply RandomResizedCrop to both image and mask using the same parameters
-            # image = F.resized_crop(image, *params, size= self.target_size, interpolation=v2.InterpolationMode.BILINEAR)
-            # mask = F.resized_crop(mask, *params, size= self.target_size, interpolation=v2.InterpolationMode.NEAREST)
+            # Apply RandomResizedCrop to both image and mask using the same parameters
+            image = F.resized_crop(image, *params, size= self.target_size, interpolation=v2.InterpolationMode.BILINEAR)
+            mask = F.resized_crop(mask, *params, size= self.target_size, interpolation=v2.InterpolationMode.NEAREST)
 
-            image = image.unsqueeze(0)
-            mask = mask.unsqueeze(0).float()
-            image = interpolate(image, size= self.target_size, mode = "bilinear", align_corners=False)
-            mask = interpolate(mask, size= self.target_size, mode = "nearest")
-            image = image.squeeze(0)
-            mask = mask.squeeze(0).long()
+            # image = image.unsqueeze(0)
+            # mask = mask.unsqueeze(0).float()
+            # image = interpolate(image, size= self.target_size, mode = "bilinear", align_corners=False)
+            # mask = interpolate(mask, size= self.target_size, mode = "nearest")
+            # image = image.squeeze(0)
+            # mask = mask.squeeze(0).long()
         # Apply the same flipping transformations to both image and mask
         if torch.rand(1) < 0.5:
             image = F.hflip(image)

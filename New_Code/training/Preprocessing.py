@@ -5,7 +5,7 @@ import kornia as K
 import numpy as np
 from torch.utils.data import Dataset as BaseDataset
 from scipy import stats
-from augmentations import resize_and_pad, Augmentation, ValidationAugmentation # Import the resize_and_pad function
+from augmentations import Augmentation, ValidationAugmentation 
 import json
 import torch.nn.functional as F
 import matplotlib.pyplot as plt
@@ -18,9 +18,8 @@ with open('New_Code/configs/training_config.json') as f:
     train_config = json.load(f)
 
 
-
-#DEVICE = torch.device(preprocessing_config["device"])
 DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
+
 class Dataset(BaseDataset):
     def __init__(self, dir_path, image_ids, mask_ids, detection_model, augmentation=None, target_size=(640, 640)):
         self.image_ids = image_ids
@@ -32,7 +31,8 @@ class Dataset(BaseDataset):
 
 
     def detect_and_crop(self, image, mask):
-        image_tensor = K.image_to_tensor(np.array(image)).float().unsqueeze(0)
+        image_tensor = K.image_to_tensor(np.array(image)).float().unsqueeze(0).to(DEVICE)
+        self.detection_model.to(DEVICE)
         # Perform detection
         with torch.no_grad():
             detections = self.detection_model(image_tensor)[0]
@@ -82,7 +82,7 @@ class Dataset(BaseDataset):
             raise ValueError("mask is none")
         
         #OBJECT DETECTION
-        if train_config["object_detection"] == "True":
+        if train_config["object_detection"]:
             # Convert NumPy arrays to PIL Images
             image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
             image = Image.fromarray(image)

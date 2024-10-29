@@ -21,7 +21,8 @@ class Epoch:
     def _to_device(self):
         self.model.to(self.device)
         self.CE_Loss.to(self.device)
-        self.DICE_Loss.to(self.device)
+        if self.DICE_Loss != None:
+            self.DICE_Loss.to(self.device)
 
 
     def display_images(self, image, ground_truth, prediction_mask):

@@ -101,10 +101,13 @@ def main():
 
     if train_config["dice"]:
         DICE_Loss = smp.losses.DiceLoss(mode = "multiclass")
+    else: 
+        DICE_Loss = None
+
     #Segmentation loss function is either only weighted BCE or weighted BCE + DICE
 
 
-    if train_config["display_image"] == "True":
+    if train_config["display_image"]:
         display_image = True
     else: display_image = False
 

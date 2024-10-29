@@ -2,7 +2,7 @@ import torch
 import torch.nn as nn
 import segmentation_models_pytorch as smp
 from transformers import SwinModel
-from torchvision.models import swin_b, swin_v2_t, swin_v2_s
+from torchvision.models import swin_b, swin_v2_t, swin_v2_s, swin_v2_b, Swin_V2_B_Weights
 from torchvision.models.feature_extraction import create_feature_extractor
 from torchvision.models.detection import fasterrcnn_resnet50_fpn, FasterRCNN_ResNet50_FPN_Weights
 from torchvision.models.detection.faster_rcnn import FastRCNNPredictor
@@ -27,7 +27,6 @@ class UNetWithClassification(nn.Module):
 
 ########################
 #transformer based
-
 
 class UNetDecoder(nn.Module):
     def __init__(self, decoder_channels):
@@ -68,7 +67,7 @@ class UNetWithSwinTransformer(nn.Module):
         super(UNetWithSwinTransformer, self).__init__()
         
         # Load Swin Transformer
-        self.encoder = swin_v2_t(weights='IMAGENET1K_V1')
+        self.encoder = swin_v2_b(weights=Swin_V2_B_Weights)
 
         return_nodes = {
             "features.0": "stage1",
@@ -112,7 +111,6 @@ class Faster_RCNN:
         weights = FasterRCNN_ResNet50_FPN_Weights
 
         model = fasterrcnn_resnet50_fpn(weights=FasterRCNN_ResNet50_FPN_Weights.DEFAULT)
-        
         in_features = model.roi_heads.box_predictor.cls_score.in_features
 
         model.roi_heads.box_predictor = FastRCNNPredictor(in_features, self.num_classes)
