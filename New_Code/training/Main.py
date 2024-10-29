@@ -9,7 +9,7 @@ import torch.nn.functional as F
 import matplotlib.pyplot as plt
 from Preprocessing import Dataset
 from Epochs import TrainEpoch, ValidEpoch
-from model import UNetWithClassification, UNetWithSwinTransformer
+from model import UNetWithClassification, UNetWithSwinTransformer, Faster_RCNN
 from preprocessing_memory import Memory_dataset
 
 import ssl
@@ -47,6 +47,10 @@ def main():
 
     train_ids = image_ids[:split_index]
     valid_ids = image_ids[split_index:]
+    
+    #OBJECT DETECTION -> FASTER R-CNN
+    detection_model = Faster_RCNN().get_faster_rcnn().to(DEVICE)
+    detection_model.eval()
 
     # Create dataset instances
     train_dataset = Dataset(
@@ -54,6 +58,7 @@ def main():
         image_ids=train_ids,
         mask_ids=train_ids,  # Assuming mask names match image names
         augmentation= 'train',
+        detection_model = detection_model,
         target_size= tuple(preprocessing_config["target_size"])
     )
 
@@ -62,6 +67,7 @@ def main():
         image_ids=valid_ids,
         mask_ids=valid_ids,  # Assuming mask names match image names
         augmentation='validation',
+        detection_model = detection_model,
         target_size= tuple(preprocessing_config["target_size"])
     )
 

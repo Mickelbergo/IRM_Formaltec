@@ -1,9 +1,9 @@
 {
     "device": "cuda",
-    "path": "E:/ForMalTeC/Wound_segmentation_III/Data",
-    "preprocess_path": "E:/ForMaLTeC/Wound_segmentation_III/GIT/IRM_Formaltec/New_Code/training",
+    "path": "C:/users/comi/Desktop/Wound_segmentation_III/Data",
+    "preprocess_path": "C:/Users/comi/Desktop/Wound_Segmentation_III/GIT/IRM_Formaltec/New_Code/training",
     "model_version": "v1.2",
-    "encoder": "resnet101",
+    "encoder": "transformer",
     "encoder_weights": "imagenet",
     "activation": "softmax",
     "batch_size": 8,
@@ -18,5 +18,6 @@
     "dice": true,
     "grad_clip_value": 1.0,
     "display_image": "False",
-    "num_workers": 0
+    "num_workers": 0,
+    "object_detection": "False"
 }

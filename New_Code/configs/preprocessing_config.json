@@ -11,6 +11,6 @@
     },
     "wound_classes": ["background", "wound"],
     "device": "cuda",
-    "target_size": [640,640],
+    "target_size": [224,224],
     "segmentation": "multiclass"
 }

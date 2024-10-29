@@ -2,11 +2,15 @@ import cv2
 from torchvision.transforms import v2
 import torch
 import torchvision.transforms.functional as F
+from torch.nn.functional import interpolate
 import matplotlib.pyplot as plt
 import numpy as np
 import cv2
 import torch
+import json
 
+with open('New_Code/configs/training_config.json') as f:
+    train_config = json.load(f)
 
 
 class Augmentation:
@@ -30,14 +34,21 @@ class Augmentation:
 
         image = image / 255.0 #convert to float image
 
+        if train_config["object_detection"] == "False":
 
-        # Get the parameters for RandomResizedCrop (apply same params to both image and mask)
-        params = v2.RandomResizedCrop.get_params(image, scale=(1.0, 1.0), ratio=(1.0, 1.0))
-        
-        # Apply RandomResizedCrop to both image and mask using the same parameters
-        image = F.resized_crop(image, *params, size= self.target_size, interpolation=v2.InterpolationMode.BILINEAR)
-        mask = F.resized_crop(mask, *params, size= self.target_size, interpolation=v2.InterpolationMode.NEAREST)
+            # Get the parameters for RandomResizedCrop (apply same params to both image and mask)
+            # params = v2.RandomResizedCrop.get_params(image, scale=(1.0, 1.0), ratio=(1.0, 1.0))
+            
+            # # Apply RandomResizedCrop to both image and mask using the same parameters
+            # image = F.resized_crop(image, *params, size= self.target_size, interpolation=v2.InterpolationMode.BILINEAR)
+            # mask = F.resized_crop(mask, *params, size= self.target_size, interpolation=v2.InterpolationMode.NEAREST)
 
+            image = image.unsqueeze(0)
+            mask = mask.unsqueeze(0).float()
+            image = interpolate(image, size= self.target_size, mode = "bilinear", align_corners=False)
+            mask = interpolate(mask, size= self.target_size, mode = "nearest")
+            image = image.squeeze(0)
+            mask = mask.squeeze(0).long()
         # Apply the same flipping transformations to both image and mask
         if torch.rand(1) < 0.5:
             image = F.hflip(image)
@@ -91,51 +102,6 @@ class ValidationAugmentation:
         image = self.normalize(image)
 
         return image, mask.long()
-
-################################## DEPRECATED ##################################################
-
-
-def resize_and_pad(image, mask, target_size=(640, 640)):
-    """
-    Resize the image and mask to maintain aspect ratio and then pad to the target size.
-    
-    Args:
-        image (np.ndarray): The original image.
-        mask (np.ndarray): The corresponding mask.
-        target_size (tuple): The target size (height, width) to resize and pad the image and mask to.
-        
-    Returns:
-        padded_image (np.ndarray): The resized and padded image.
-        padded_mask (np.ndarray): The resized and padded mask.
-    """
-    target_height, target_width = target_size
-    
-    # Get current dimensions
-    height, width = image.shape[:2]
-    
-    # Resize the image and mask while keeping the aspect ratio
-    if width > height:
-        scale = target_width / width
-        new_width = target_width
-        new_height = int(height * scale)
-    else:
-        scale = target_height / height
-        new_height = target_height
-        new_width = int(width * scale)
-    
-    resized_image = cv2.resize(image, (new_width, new_height))
-    resized_mask = cv2.resize(mask, (new_width, new_height), interpolation=cv2.INTER_NEAREST)
-    
-    # Pad the resized image and mask to the target size
-    delta_w = target_width - new_width
-    delta_h = target_height - new_height
-    top, bottom = delta_h // 2, delta_h - (delta_h // 2)
-    left, right = delta_w // 2, delta_w - (delta_w // 2)
-    
-    padded_image = cv2.copyMakeBorder(resized_image, top, bottom, left, right, cv2.BORDER_CONSTANT, value=[0, 0, 0])
-    padded_mask = cv2.copyMakeBorder(resized_mask, top, bottom, left, right, cv2.BORDER_CONSTANT, value=0)
-    
-    return padded_image, padded_mask
 
 
 
