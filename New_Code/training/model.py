@@ -4,6 +4,7 @@ import segmentation_models_pytorch as smp
 from transformers import SwinModel
 from torchvision.models import swin_b, swin_v2_t, swin_v2_s
 from torchvision.models.feature_extraction import create_feature_extractor
+from torchvision.models.detection import fasterrcnn_resnet50_fpn
 
 class UNetWithClassification(nn.Module):
     def __init__(self, encoder_name='resnet34', encoder_weights='imagenet', classes=2, activation='sigmoid'):
@@ -62,7 +63,7 @@ class UNetWithSwinTransformer(nn.Module):
         super(UNetWithSwinTransformer, self).__init__()
         
         # Load Swin Transformer
-        self.encoder = swin_v2_t(weights='IMAGENET1K_V1')
+        self.encoder = swin_v2_t()
 
         return_nodes = {
             "features.0": "stage1",
@@ -96,7 +97,17 @@ class UNetWithSwinTransformer(nn.Module):
         segmentation_output = self.segmentation_head(decoder_output)
         
         return self.activation(segmentation_output)
+    
+class F_RCNN:
+    def __init__(self, num_classes=2):
+        self.num_classes = num_classes
 
+    def get_faster_rcnn(self):
+        model = fasterrcnn_resnet50_fpn(pretrained=True)
+        in_features = model.roi_heads.box_predictor.cls_score.in_features
+        model.roi_heads.box_predictor = nn.Linear(in_features, self.num_classes)
+        return model
+    
 # Example usage
 if __name__ == "__main__":
     model = UNetWithSwinTransformer(classes=2, activation='sigmoid')

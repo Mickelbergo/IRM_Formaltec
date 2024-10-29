@@ -25,3 +25,5 @@ segmentation: multiclass -> binary
 #13 = geformter bluterguss + hautabschürfung
 #14 = thermische gewalt + hautabschürfung
 
+To effectively use a transformer model, we first perform object detection to identify the regions of interest (the wounds), and then we can crop the image based on these ROIs.
+We then segment the image using a transformer
