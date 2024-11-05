@@ -10,7 +10,6 @@ import matplotlib.pyplot as plt
 from Preprocessing import Dataset
 from Epochs import TrainEpoch, ValidEpoch
 from model import UNetWithClassification, UNetWithSwinTransformer, Faster_RCNN
-from preprocessing_memory import Memory_dataset
 
 import ssl
 ssl._create_default_https_context = ssl._create_unverified_context

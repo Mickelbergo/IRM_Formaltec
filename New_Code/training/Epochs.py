@@ -17,7 +17,7 @@ class Epoch:
         self.display_image = display_image
         self._to_device()
 
-    # Move model and loss functions to the specified device (GPU or CPU)
+
     def _to_device(self):
         self.model.to(self.device)
         self.CE_Loss.to(self.device)
@@ -47,8 +47,8 @@ class Epoch:
         plt.axis('off')
 
         
-        plt.draw()  # Draw the updated figure without blocking
-        plt.pause(0.2)  # Small pause to allow the plot to update
+        plt.draw()  
+        plt.pause(0.2)
 
 
 
@@ -131,16 +131,12 @@ class TrainEpoch(Epoch):
         y_pred = self.model(x)
 
         # Calculate segmentation loss
-        seg_loss = self.CE_Loss(y_pred, mask)
+        loss = self.CE_Loss(y_pred, mask)
 
         #also incorporate dice loss
         if self.DICE_Loss != None:
-            seg_loss2 = self.DICE_Loss(y_pred, mask)
-        else: seg_loss2 = 0
+            loss += self.DICE_Loss(y_pred, mask)
 
-        seg_loss = seg_loss + seg_loss2
-        
-        loss = seg_loss
         loss.backward()
 
         torch.nn.utils.clip_grad_norm_(self.model.parameters(), self.grad_clip_value)
