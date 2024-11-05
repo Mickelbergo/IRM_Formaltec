@@ -10,9 +10,10 @@ import matplotlib.pyplot as plt
 from Preprocessing import Dataset
 from Epochs import TrainEpoch, ValidEpoch
 from model import UNetWithClassification, UNetWithSwinTransformer, Faster_RCNN
-
+from segmentation_models_pytorch.encoders import get_preprocessing_fn
 import ssl
 ssl._create_default_https_context = ssl._create_unverified_context
+
 def main():
 
     # Load configurations
@@ -24,7 +25,7 @@ def main():
 
     # Device configuration
     DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
-    print(DEVICE)
+    print(f'Initializing Device: {DEVICE}')
 
     # Set paths
     path = train_config["path"]
@@ -51,6 +52,9 @@ def main():
     detection_model = Faster_RCNN().get_faster_rcnn().to(DEVICE)
     detection_model.eval()
 
+    if train_config["encoder"] != "transformer":
+        preprocessing_fn = get_preprocessing_fn(train_config["encoder"], pretrained= train_config["encoder_weights"])
+
     # Create dataset instances
     train_dataset = Dataset(
         dir_path=path,
@@ -58,6 +62,7 @@ def main():
         mask_ids=train_ids,  # Assuming mask names match image names
         augmentation= 'train',
         detection_model = detection_model,
+        preprocessing_fn= preprocessing_fn,
         target_size= tuple(preprocessing_config["target_size"])
     )
 
@@ -67,6 +72,7 @@ def main():
         mask_ids=valid_ids,  # Assuming mask names match image names
         augmentation='validation',
         detection_model = detection_model,
+        preprocessing_fn= preprocessing_fn,
         target_size= tuple(preprocessing_config["target_size"])
     )
 
@@ -81,22 +87,25 @@ def main():
             encoder_name=train_config["encoder"],
             encoder_weights=train_config["encoder_weights"],
             classes= train_config["segmentation_classes"],  # Segmentation classes (e.g., wound vs. background),  # Replace with the actual number of wound classes
-            activation=train_config["activation"]
+            activation=None #crossentropy loss expects raw logits
         )
     model = model.to(DEVICE)
 
     # Define optimizer, loss, and scheduler
-    optimizer = torch.optim.Adam(model.parameters(), lr=train_config["optimizer_lr"])
+    optimizer = torch.optim.AdamW(model.parameters(), lr=train_config["optimizer_lr"])
     scheduler = torch.optim.lr_scheduler.ExponentialLR(optimizer, gamma=train_config["lr_scheduler_gamma"])
     encoder = train_config["encoder"]
+
     # Define the type of segmentation, the corresponding loss function and the weights
+
     segmentation = preprocessing_config["segmentation"] #either 'binary' or 'multiclass'
     class_weights_multiclass = torch.load(os.path.join(path, "class_weights.pth")).float().to(DEVICE)
     class_weights = torch.tensor(train_config["class_weights"]).to(DEVICE)
+
     if segmentation == "binary": 
         CE_Loss = nn.CrossEntropyLoss(weight = class_weights) #use the predefined weights for background vs wound
     else:
-        CE_Loss = nn.CrossEntropyLoss(weight = class_weights_multiclass) #no weights yet
+        CE_Loss = nn.CrossEntropyLoss(weight = class_weights_multiclass) 
 
     if train_config["dice"]:
         DICE_Loss = smp.losses.DiceLoss(mode = "multiclass")
@@ -104,7 +113,6 @@ def main():
         DICE_Loss = None
 
     #Segmentation loss function is either only weighted BCE or weighted BCE + DICE
-
 
     if train_config["display_image"]:
         display_image = True

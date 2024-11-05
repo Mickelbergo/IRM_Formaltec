@@ -4,6 +4,8 @@ import numpy as np
 from tqdm import tqdm as tqdm
 import sys
 import matplotlib.pyplot as plt
+import segmentation_models_pytorch as smp
+import torchmetrics
 
 class Epoch:
     def __init__(self, model, CE_Loss, DICE_Loss, segmentation, stage_name, device=None, display_image = False, verbose=True, nr_classes = 15):
@@ -62,6 +64,9 @@ class Epoch:
         accs = []
         iou_scores = []
         
+        #initialize iou_metric
+        JaccardIndex = torchmetrics.JaccardIndex(task = "multiclass", num_classes = self.nr_classes).to(self.device)
+        
 
         with tqdm(dataloader, desc=self.stage_name, file=sys.stdout, disable=not self.verbose) as iterator:
             for batch_idx, (x, binary_mask, multiclass_mask, _) in enumerate(iterator): 
@@ -82,17 +87,18 @@ class Epoch:
                 # Convert predicted mask to single-channel by taking argmax
                 pred_mask = y_pred.argmax(dim=1)  # Now pred_mask is [Batch, 640, 640]
 
-                if self.display_image == True and batch_idx % 10 == 0:
+                if self.display_image == True and batch_idx % 20 == 0:
                     self.display_images(x, mask, pred_mask)
 
 
                 # Record loss, accuracy, and IoU for the batch
                 losses.append(loss.item())
                 acc = (pred_mask == mask).float().mean().item()  # Accuracy
-                iou_score = self.calculate_iou(pred_mask, mask, n_classes = self.nr_classes)  # IoU calculation
+                #iou_score = self.calculate_iou(pred_mask, mask, n_classes = self.nr_classes)  # IoU calculation
 
+                iou_score = JaccardIndex(pred_mask, mask)
                 accs.append(acc)
-                iou_scores.append(iou_score)
+                iou_scores.append(iou_score.item())
 
                 # Update logs with current metrics
                 logs.update({
@@ -104,7 +110,10 @@ class Epoch:
                 if self.verbose:
                     iterator.set_postfix_str(logs)
 
+        JaccardIndex.reset() #necessary?
+
         return logs
+    
 
     # Method to calculate Intersection over Union (IoU)
     def calculate_iou(self, pred, target, n_classes=15):
@@ -153,7 +162,7 @@ class TrainEpoch(Epoch):
 
         loss.backward()
 
-        torch.nn.utils.clip_grad_norm_(self.model.parameters(), self.grad_clip_value)
+        #torch.nn.utils.clip_grad_norm_(self.model.parameters(), self.grad_clip_value)
         
         # Update the model's parameters
         self.optimizer.step()

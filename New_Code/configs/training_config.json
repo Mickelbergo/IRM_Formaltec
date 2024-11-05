@@ -1,13 +1,13 @@
 {
     "device": "cuda",
-    "path": "C:/users/comi/Desktop/Wound_segmentation_III/Data",
-    "preprocess_path": "C:/Users/comi/Desktop/Wound_Segmentation_III/GIT/IRM_Formaltec/New_Code/training",
+    "path": "C:/Users/comi/Desktop/Wound_segmentation_III/Data",
+    "preprocess_path": "C:/Users/comi/Desktop/Wound_Segmentation_III/IRM_Formaltec/New_Code/training",
     "model_version": "v1.3",
     "encoder": "mit_b5",
     "encoder_weights": "imagenet",
     "activation": "softmax",
-    "batch_size": 3,
-    "num_epochs": 100,
+    "batch_size": 4,
+    "num_epochs": 150,
     "optimizer_lr": 0.001,
     "optimizer": "adam",
     "lr_scheduler_gamma": 0.95,
@@ -17,7 +17,7 @@
     "class_weights": [0.01,0.99],
     "dice": true,
     "grad_clip_value": 1.0,
-    "display_image": false,
+    "display_image": true,
     "num_workers": 0,
     "object_detection": false
 }

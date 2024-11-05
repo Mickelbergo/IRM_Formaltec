@@ -8,14 +8,15 @@ import numpy as np
 import cv2
 import torch
 import json
-
+import albumentations as A
 with open('New_Code/configs/training_config.json') as f:
     train_config = json.load(f)
 
 
 class Augmentation:
-    def __init__(self, target_size):
+    def __init__(self, target_size, preprocesssing_fn = None):
         self.target_size = target_size
+        self.preprocessing_fn = preprocesssing_fn
 
         # Normalization only for images
         self.normalize = v2.Compose([
@@ -32,8 +33,7 @@ class Augmentation:
             raise TypeError("Mask should be a tensor")
 
 
-        image = image / 255.0 #convert to float image
-
+ 
         if train_config["object_detection"] == "False":
 
             # Get the parameters for RandomResizedCrop (apply same params to both image and mask)
@@ -49,6 +49,7 @@ class Augmentation:
             # mask = interpolate(mask, size= self.target_size, mode = "nearest")
             # image = image.squeeze(0)
             # mask = mask.squeeze(0).long()
+
         # Apply the same flipping transformations to both image and mask
         if torch.rand(1) < 0.5:
             image = F.hflip(image)
@@ -58,8 +59,15 @@ class Augmentation:
             image = F.vflip(image)
             mask = F.vflip(mask)
 
-        # Normalize the image (but not the mask)
-        image = self.normalize(image)
+        # Normalize the image (but not the mask)  
+        if self.preprocessing_fn is not None:
+
+            image_np = image.permute(1, 2, 0).cpu().numpy()
+            image_np = self.preprocessing_fn(image_np) #apply preprocessing function (which depends on the model we use)
+            image = torch.from_numpy(image_np).permute(2, 0, 1).float() 
+        else:
+            image = image / 255.0
+            image = self.normalize(image)
 
         # mask = mask.permute(1,2,0)
         # plt.imshow(mask, cmap = 'gray')
@@ -72,7 +80,7 @@ class Augmentation:
         return image, mask
 
 class ValidationAugmentation:
-    def __init__(self, target_size):
+    def __init__(self, target_size, preprocessing_fn = None):
         # Define fixed resizing for validation (no randomness)
         self.transforms = v2.Compose([
             v2.ToDtype(torch.float32),
@@ -83,23 +91,29 @@ class ValidationAugmentation:
         self.normalize = v2.Compose([
             v2.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
         ])
+        self.preprocessing_fn = preprocessing_fn
 
     def augment(self, image, mask):
-        # Ensure the image and mask are Torch tensors
         if not isinstance(image, torch.Tensor):
             raise TypeError("Image should be a tensor")
         if not isinstance(mask, torch.Tensor):
             raise TypeError("Mask should be a tensor")
         
-        image = image/255.0 #convert to float image
-
-        
         # Resize both image and mask (without randomness)
         image = self.transforms(image)
         mask = self.transforms(mask)
 
-        # Normalize the image (but not the mask)
-        image = self.normalize(image)
+
+        if self.preprocessing_fn is not None:
+            image_np = image.permute(1, 2, 0).cpu().numpy()
+
+            image_np = self.preprocessing_fn(image_np)
+            image = torch.from_numpy(image_np).permute(2, 0, 1).float()
+        else:
+
+            image = image/255.0 #convert to float image
+            image = self.normalize(image)
+        
 
         return image, mask.long()
 
