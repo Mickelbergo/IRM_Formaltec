@@ -1,3 +1,2 @@
-1. fix the swin transformer architecture (might add some new layers, or some skip connections, look at chatgpt from last week)
-
-2. refine object detection -> train a object detection model instead of just using a pretrained one
+1. look at different combinations of FPN/Unet/Unetplusplus/DeepLabV3 with different encoders
+2. look if augmentation is good, for that look at Unet + Resnet101, which had good results before

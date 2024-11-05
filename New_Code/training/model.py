@@ -7,10 +7,12 @@ from torchvision.models.feature_extraction import create_feature_extractor
 from torchvision.models.detection import fasterrcnn_resnet50_fpn, FasterRCNN_ResNet50_FPN_Weights
 from torchvision.models.detection.faster_rcnn import FastRCNNPredictor
 
+#print(smp.encoders.get_encoder_names())
+
 class UNetWithClassification(nn.Module):
     def __init__(self, encoder_name='resnet34', encoder_weights='imagenet', classes=2, activation='sigmoid'):
         super(UNetWithClassification, self).__init__()
-        self.segmentation_model = smp.Unet(
+        self.segmentation_model = smp.UnetPlusPlus(
             encoder_name=encoder_name,
             encoder_weights=encoder_weights,
             classes=classes,

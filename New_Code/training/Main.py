@@ -60,7 +60,7 @@ def main():
 
     if train_config["encoder"] != "transformer":
         preprocessing_fn = get_preprocessing_fn(train_config["encoder"], pretrained= train_config["encoder_weights"])
-
+        
     # Create dataset instances
     train_dataset = Dataset(
         dir_path=path,
@@ -86,8 +86,8 @@ def main():
         device = DEVICE)
     
 
-    train_loader = DataLoader(train_dataset, batch_size=train_config["batch_size"], shuffle=True, num_workers= train_config["num_workers"], worker_init_fn= worker_init_fn, persistent_workers= True)
-    valid_loader = DataLoader(valid_dataset, batch_size=train_config["batch_size"], shuffle=False, num_workers= train_config["num_workers"], worker_init_fn= worker_init_fn, persistent_workers=True)
+    train_loader = DataLoader(train_dataset, batch_size=train_config["batch_size"], shuffle=True, num_workers= train_config["num_workers"], worker_init_fn= worker_init_fn, persistent_workers= False)
+    valid_loader = DataLoader(valid_dataset, batch_size=train_config["batch_size"], shuffle=False, num_workers= train_config["num_workers"], worker_init_fn= worker_init_fn, persistent_workers=False)
 
     # Define model
     if train_config["encoder"] == "transformer": #using SWIN transformer from huggingface with pretrained weights
@@ -102,7 +102,7 @@ def main():
     model = model.to(DEVICE)
 
     # Define optimizer, loss, and scheduler
-    optimizer = torch.optim.AdamW(model.parameters(), lr=train_config["optimizer_lr"])
+    optimizer = torch.optim.Adam(model.parameters(), lr=train_config["optimizer_lr"])
     scheduler = torch.optim.lr_scheduler.ExponentialLR(optimizer, gamma=train_config["lr_scheduler_gamma"])
     encoder = train_config["encoder"]
 
