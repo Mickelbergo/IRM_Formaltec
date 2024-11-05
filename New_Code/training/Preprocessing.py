@@ -11,18 +11,8 @@ import torch.nn.functional as F
 import matplotlib.pyplot as plt
 from PIL import Image
 
-# Load preprocessing config
-with open('New_Code/configs/preprocessing_config.json') as f:
-    preprocessing_config = json.load(f)
-
-with open('New_Code/configs/training_config.json') as f:
-    train_config = json.load(f)
-
-
-DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
-
 class Dataset(BaseDataset):
-    def __init__(self, dir_path, image_ids, mask_ids, detection_model, augmentation=None, preprocessing_fn = None, target_size=(640, 640)):
+    def __init__(self, dir_path, image_ids, mask_ids, detection_model = None, augmentation=None, preprocessing_fn = None, target_size=(640, 640), preprocessing_config = None, train_config = None, device = None):
         self.image_ids = image_ids
         self.mask_ids = mask_ids
         self.dir_path = dir_path
@@ -30,10 +20,13 @@ class Dataset(BaseDataset):
         self.detection_model = detection_model
         self.target_size = target_size
         self.preprocessing_fn = preprocessing_fn
+        self.preprocessing_config = preprocessing_config
+        self.train_config = train_config
+        self.device = device
 
     def detect_and_crop(self, image, mask):
-        image_tensor = K.image_to_tensor(np.array(image)).float().unsqueeze(0).to(DEVICE)
-        self.detection_model.to(DEVICE)
+        image_tensor = K.image_to_tensor(np.array(image)).float().unsqueeze(0).to(self.device)
+        self.detection_model.to(self.device)
         # Perform detection
         with torch.no_grad():
             detections = self.detection_model(image_tensor)[0]
@@ -83,7 +76,7 @@ class Dataset(BaseDataset):
             raise ValueError("mask is none")
         
         #OBJECT DETECTION
-        if train_config["object_detection"]:
+        if self.train_config["object_detection"]:
             # Convert NumPy arrays to PIL Images
             image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
             image = Image.fromarray(image)
@@ -106,19 +99,21 @@ class Dataset(BaseDataset):
         # Filter out background (class 0) and get non-background classes
         non_background_pixels = multiclass_mask[multiclass_mask != 0]
         
-        if len(non_background_pixels) > 0:
-            # Determine the most frequent non-background class in the mask
-            dominant_class = int(torch.mode(non_background_pixels.flatten())[0])
-        else:
-            # Handle edge case where the mask is entirely background
-            dominant_class = 0
-        
+
+        # if len(non_background_pixels) > 0:
+        #     # Determine the most frequent non-background class in the mask
+        #     dominant_class = int(torch.mode(non_background_pixels.flatten())[0])
+        # else:
+        #     # Handle edge case where the mask is entirely background
+        #     dominant_class = 0
+
+        dominant_class = 0
 
         # Convert to tensor 
         #note that Kornia permutes the images directly, no need to manually permute
-        image = K.image_to_tensor(image).float().to(DEVICE)
-        binary_mask = K.image_to_tensor(binary_mask).long().to(DEVICE)  # Binary mask for segmentation
-        multiclass_mask = K.image_to_tensor(multiclass_mask).long().to(DEVICE)  # Multiclass segmentation
+        image = K.image_to_tensor(image).float().to(self.device)
+        binary_mask = K.image_to_tensor(binary_mask).long().to(self.device)  # Binary mask for segmentation
+        multiclass_mask = K.image_to_tensor(multiclass_mask).long().to(self.device)  # Multiclass segmentation
 
         #self.visualize_sample(image, multiclass_mask, binary_mask)
 
@@ -127,12 +122,12 @@ class Dataset(BaseDataset):
 
         # Apply augmentations
         if self.augmentation == 'train':
-            if preprocessing_config["segmentation"] == "binary":
+            if self.preprocessing_config["segmentation"] == "binary":
                 image, binary_mask = Augmentation(self.target_size, self.preprocessing_fn).augment(image, binary_mask)
             else: image, multiclass_mask = Augmentation(self.target_size, self.preprocessing_fn).augment(image, multiclass_mask)
         
         if self.augmentation == 'validation':
-            if preprocessing_config["segmentation"] == "binary":
+            if self.preprocessing_config["segmentation"] == "binary":
                 image, binary_mask = ValidationAugmentation(self.target_size, self.preprocessing_fn).augment(image, binary_mask)
             else: image, multiclass_mask = Augmentation(self.target_size, self.preprocessing_fn).augment(image, multiclass_mask)
 

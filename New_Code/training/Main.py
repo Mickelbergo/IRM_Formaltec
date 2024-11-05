@@ -12,7 +12,13 @@ from Epochs import TrainEpoch, ValidEpoch
 from model import UNetWithClassification, UNetWithSwinTransformer, Faster_RCNN
 from segmentation_models_pytorch.encoders import get_preprocessing_fn
 import ssl
+import numpy as np
 ssl._create_default_https_context = ssl._create_unverified_context
+
+def worker_init_fn(worker_id): #initialize random seed for each worker
+    seed = torch.initial_seed() % 2 ** 32
+    np.random.seed(seed)
+    random.seed(seed)
 
 def main():
 
@@ -61,23 +67,27 @@ def main():
         image_ids=train_ids,
         mask_ids=train_ids,  # Assuming mask names match image names
         augmentation= 'train',
-        detection_model = detection_model,
         preprocessing_fn= preprocessing_fn,
-        target_size= tuple(preprocessing_config["target_size"])
-    )
+        target_size= tuple(preprocessing_config["target_size"]),
+        preprocessing_config = preprocessing_config,
+        train_config = train_config,
+        device = DEVICE)
+
 
     valid_dataset = Dataset(
         dir_path=path,
         image_ids=valid_ids,
         mask_ids=valid_ids,  # Assuming mask names match image names
         augmentation='validation',
-        detection_model = detection_model,
         preprocessing_fn= preprocessing_fn,
-        target_size= tuple(preprocessing_config["target_size"])
-    )
+        target_size= tuple(preprocessing_config["target_size"]),
+        preprocessing_config = preprocessing_config,
+        train_config = train_config,
+        device = DEVICE)
+    
 
-    train_loader = DataLoader(train_dataset, batch_size=train_config["batch_size"], shuffle=True, num_workers= train_config["num_workers"])
-    valid_loader = DataLoader(valid_dataset, batch_size=train_config["batch_size"], shuffle=False, num_workers= train_config["num_workers"])
+    train_loader = DataLoader(train_dataset, batch_size=train_config["batch_size"], shuffle=True, num_workers= train_config["num_workers"], worker_init_fn= worker_init_fn, persistent_workers= True)
+    valid_loader = DataLoader(valid_dataset, batch_size=train_config["batch_size"], shuffle=False, num_workers= train_config["num_workers"], worker_init_fn= worker_init_fn, persistent_workers=True)
 
     # Define model
     if train_config["encoder"] == "transformer": #using SWIN transformer from huggingface with pretrained weights
@@ -99,7 +109,7 @@ def main():
     # Define the type of segmentation, the corresponding loss function and the weights
 
     segmentation = preprocessing_config["segmentation"] #either 'binary' or 'multiclass'
-    class_weights_multiclass = torch.load(os.path.join(path, "class_weights.pth")).float().to(DEVICE)
+    class_weights_multiclass = torch.load(os.path.join(path, "class_weights.pth"), weights_only= True).float().to(DEVICE)
     class_weights = torch.tensor(train_config["class_weights"]).to(DEVICE)
 
     if segmentation == "binary": 
