@@ -111,8 +111,9 @@ def main():
     else: display_image = False
 
     # Define training and validation epochs
-    train_epoch = TrainEpoch(model, CE_Loss, DICE_Loss, segmentation, optimizer, device=DEVICE, grad_clip_value = train_config["grad_clip_value"], display_image = display_image)
-    valid_epoch = ValidEpoch(model, CE_Loss, DICE_Loss, segmentation, device=DEVICE, display_image = display_image)
+    train_epoch = TrainEpoch(model, CE_Loss, DICE_Loss, segmentation, optimizer, device=DEVICE, grad_clip_value = train_config["grad_clip_value"], 
+                            display_image = display_image, nr_classes = train_config["segmentation_classes"])
+    valid_epoch = ValidEpoch(model, CE_Loss, DICE_Loss, segmentation, device=DEVICE, display_image = display_image, nr_classes = train_config["segmentation_classes"])
 
     # Training loop
     max_score = 0

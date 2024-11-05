@@ -6,7 +6,7 @@ import sys
 import matplotlib.pyplot as plt
 
 class Epoch:
-    def __init__(self, model, CE_Loss, DICE_Loss, segmentation, stage_name, device=None, display_image = False, verbose=True):
+    def __init__(self, model, CE_Loss, DICE_Loss, segmentation, stage_name, device=None, display_image = False, verbose=True, nr_classes = 15):
         self.model = model
         self.CE_Loss = CE_Loss
         self.DICE_Loss = DICE_Loss
@@ -16,6 +16,7 @@ class Epoch:
         self.device = device
         self.display_image = display_image
         self._to_device()
+        self.nr_classes = nr_classes
 
 
     def _to_device(self):
@@ -88,7 +89,7 @@ class Epoch:
                 # Record loss, accuracy, and IoU for the batch
                 losses.append(loss.item())
                 acc = (pred_mask == mask).float().mean().item()  # Accuracy
-                iou_score = self.calculate_iou(pred_mask, mask)  # IoU calculation
+                iou_score = self.calculate_iou(pred_mask, mask, n_classes = self.nr_classes)  # IoU calculation
 
                 accs.append(acc)
                 iou_scores.append(iou_score)
@@ -106,16 +107,29 @@ class Epoch:
         return logs
 
     # Method to calculate Intersection over Union (IoU)
-    def calculate_iou(self, pred, target, n_classes=2):
-        intersection = torch.logical_and(pred, target)
-        union = torch.logical_or(pred, target)
-        iou = torch.sum(intersection) / torch.sum(union)
-        return iou.item()
+    def calculate_iou(self, pred, target, n_classes=15):
+        iou_list = []
+        pred = pred.view(-1)
+        target = target.view(-1)
+        for cls in range(n_classes):
+            pred_inds = (pred == cls)
+            target_inds = (target == cls)
+            intersection = (pred_inds & target_inds).sum().item()
+            union = pred_inds.sum().item() + target_inds.sum().item() - intersection
+            if union == 0:
+                # No ground truth or prediction for this class in the batch
+                iou = float('nan')  # Assign NaN and exclude from mean calculation later
+            else:
+                iou = float(intersection) / float(union)
+            iou_list.append(iou)
+        # Compute the mean IoU, excluding NaN values
+        mean_iou = np.nanmean(iou_list)
+        return mean_iou
 
 # Training epoch class
 class TrainEpoch(Epoch):
-    def __init__(self, model, CE_Loss, DICE_Loss = None, segmentation = "binary", optimizer = None, device=None, grad_clip_value = 1.0, display_image = False, verbose=True):
-        super().__init__(model, CE_Loss, DICE_Loss, segmentation, stage_name='train', device=device, display_image = display_image,  verbose=verbose)
+    def __init__(self, model, CE_Loss, DICE_Loss = None, segmentation = "binary", optimizer = None, device=None, grad_clip_value = 1.0, display_image = False, verbose=True, nr_classes = 15):
+        super().__init__(model, CE_Loss, DICE_Loss, segmentation, stage_name='train', device=device, display_image = display_image,  verbose=verbose, nr_classes= nr_classes)
         self.optimizer = optimizer
         self.grad_clip_value = grad_clip_value
 
@@ -148,8 +162,8 @@ class TrainEpoch(Epoch):
 
 # Validation epoch class
 class ValidEpoch(Epoch):
-    def __init__(self, model, CE_Loss, DICE_Loss = None, segmentation = "binary", device=None, display_image = False, verbose=True):
-        super().__init__(model, CE_Loss, DICE_Loss, segmentation, stage_name='valid', device=device, display_image= display_image, verbose=verbose)
+    def __init__(self, model, CE_Loss, DICE_Loss = None, segmentation = "binary", device=None, display_image = False, verbose=True, nr_classes = 15):
+        super().__init__(model, CE_Loss, DICE_Loss, segmentation, stage_name='valid', device=device, display_image= display_image, verbose=verbose, nr_classes= nr_classes)
 
     # Set the model to evaluation mode at the start of each epoch
     def on_epoch_start(self):
@@ -162,14 +176,11 @@ class ValidEpoch(Epoch):
             y_pred= self.model(x)
 
             # Calculate segmentation loss
-            seg_loss = self.CE_Loss(y_pred, mask)
+            loss = self.CE_Loss(y_pred, mask)
 
             if self.DICE_Loss != None:
-                seg_loss2 = self.DICE_Loss(y_pred, mask)
-            else: seg_loss2 = 0
+                loss += self.DICE_Loss(y_pred, mask)
 
-            seg_loss = seg_loss + seg_loss2
 
-            loss = seg_loss
         
         return loss, y_pred
