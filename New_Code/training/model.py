@@ -12,12 +12,22 @@ from torchvision.models.detection.faster_rcnn import FastRCNNPredictor
 class UNetWithClassification(nn.Module):
     def __init__(self, encoder_name='resnet34', encoder_weights='imagenet', classes=2, activation='sigmoid'):
         super(UNetWithClassification, self).__init__()
-        self.segmentation_model = smp.UnetPlusPlus(
-            encoder_name=encoder_name,
-            encoder_weights=encoder_weights,
-            classes=classes,
-            activation=activation
-        )
+        if encoder_name == "mit_b5":
+            
+            self.segmentation_model = smp.Unet(
+                encoder_name=encoder_name, #resnet, mit_b5, etc -> segmentation_models.pytorch 
+                encoder_weights=encoder_weights,
+                classes=classes,
+                activation=activation
+            )
+        else:
+            self.segmentation_model = smp.UnetPlusPlus(
+                encoder_name=encoder_name, #resnet, mit_b5, etc -> segmentation_models.pytorch 
+                encoder_weights=encoder_weights,
+                classes=classes,
+                activation=activation
+            )
+
 
     def forward(self, x):
         # Forward pass through UNet for segmentation

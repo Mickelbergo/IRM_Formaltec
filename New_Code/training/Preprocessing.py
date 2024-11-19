@@ -25,26 +25,39 @@ class Dataset(BaseDataset):
         self.device = device
 
 
-    def detect_and_crop(self, image, mask):
+    def detect_and_crop(self, image, mask, margin=200):
+        """Detect regions using YOLO, add a margin around them, and crop image and mask."""
         if self.detection_model:
-            results = self.detection_model.predict(source=np.array(image), device=self.device, save=False)
+            results = self.detection_model.predict(source=np.array(image), device=self.device, save=False, verbose=False)
             detections = results[0].boxes
-            
-            if len(detections) > 0:
-                x1, y1, x2, y2 = map(int, detections.xyxy[0].cpu().numpy())
-                x1, y1 = max(0, x1), max(0, y1)
-                x2, y2 = min(image.width, x2), min(image.height, y2)
 
+            if len(detections) > 0:
+                # Get the bounding box with the highest confidence
+                x1, y1, x2, y2 = map(int, detections.xyxy[0].cpu().numpy())
+
+                # Add margin
+                left_margin = np.random.randint(0, margin)
+                top_margin = np.random.randint(0, margin)
+                right_margin = np.random.randint(0, margin)
+                bottom_margin = np.random.randint(0, margin)
+                x1 = max(0, x1 - left_margin)
+                y1 = max(0, y1 - top_margin)
+                x2 = min(image.width, x2 + right_margin)
+                y2 = min(image.height, y2 + bottom_margin)
+
+                # Crop and resize image and mask
                 cropped_image = image.crop((x1, y1, x2, y2)).resize(self.target_size)
                 cropped_mask = mask.crop((x1, y1, x2, y2)).resize(self.target_size, Image.NEAREST)
             else:
-                print(f"No YOLO detections found. Using full image resize.")
-                cropped_image, cropped_mask = self.resize(image, mask)
+                # If no detection, fallback to resizing the entire image
+                #print("No YOLO detections found. Using full image resize.")
+                return self.resize(image, mask)
         else:
-            cropped_image, cropped_mask = self.resize(image, mask)
+            # If no detection model is provided, resize the full image and mask
+            return self.resize(image, mask)
 
         return cropped_image, cropped_mask
- 
+
 
     def resize(self, image, mask):
         """Resize image and mask to the target size."""
@@ -66,8 +79,8 @@ class Dataset(BaseDataset):
             return self.resize(image, mask)
 
         # Randomly sample a background coordinate
-        random_coord = random.choice(background_coords)
-        center_y, center_x = random_coord
+        random_index = np.random.choice(len(background_coords)) 
+        center_y, center_x = background_coords[random_index]
 
         # Define patch boundaries
         half_h, half_w = patch_size[0] // 2, patch_size[1] // 2
@@ -108,30 +121,32 @@ class Dataset(BaseDataset):
         binary_mask = Image.fromarray(binary_mask)
         multiclass_mask = Image.fromarray(multiclass_mask)
 
-        mode = "resize"
+        mode = np.random.choice(["yolo", "resize", "background"], p = [0.3,0.6,0.1])
 
-        if self.preprocessing_config["segmentation"] == "binary":
-            if mode == "yolo":
-                image, binary_mask= self.detect_and_crop(image, binary_mask)
-            elif mode == "resize":
-                image, binary_mask= self.resize(image, binary_mask)
-            elif mode == "background":
-                image, binary_mask= self.extract_background(image, binary_mask)
-            else:
-                raise ValueError(f"Unknown mode: {mode}")
+        if self.augmentation == "train":
+            
+            if self.preprocessing_config["segmentation"] == "binary":
+                if mode == "yolo":
+                    image, binary_mask= self.detect_and_crop(image, binary_mask)
+                elif mode == "resize":
+                    image, binary_mask= self.resize(image, binary_mask)
+                elif mode == "background":
+                    image, binary_mask= self.extract_background(image, binary_mask)
+                # else:
+                #     raise ValueError(f"Unknown mode: {mode}")
 
-        elif self.preprocessing_config["segmentation"] == 'multiclass':
-            if mode == "yolo":
-                image, multiclass_mask = self.detect_and_crop(image, multiclass_mask)
-            elif mode == "resize":
-                image, multiclass_mask = self.resize(image, multiclass_mask)
-            elif mode == "background":
-                image, multiclass_mask = self.extract_background(image, multiclass_mask)
+            elif self.preprocessing_config["segmentation"] == 'multiclass':
+                if mode == "yolo":
+                    image, multiclass_mask = self.detect_and_crop(image, multiclass_mask)
+                elif mode == "resize":
+                    image, multiclass_mask = self.resize(image, multiclass_mask)
+                elif mode == "background":
+                    image, multiclass_mask = self.extract_background(image, multiclass_mask)
+                # else:
+                #     raise ValueError(f"Unknown mode: {mode}")
+            
             else:
-                raise ValueError(f"Unknown mode: {mode}")
-        
-        else:
-            raise ValueError(f'segmentation must either be "binary" or "multiclass"')
+                raise ValueError(f'segmentation must either be "binary" or "multiclass"')
 
 
         

@@ -1,12 +1,15 @@
 #my PC: "C:/users/comi/Desktop/Wound_segmentation_III/Data" "C:/Users/comi/Desktop/Wound_Segmentation_III/GIT/IRM_Formaltec/New_Code/training"
 #train PC: "E:/ForMalTeC/Wound_segmentation_III/Data" "E:/ForMaLTeC/Wound_segmentation_III/GIT/IRM_Formaltec/New_Code/training"
-#train PC2: "C/users/comi/Desktop/Wound_segmentation_III/Data" "C:/Users/comi/Desktop/Wound_Segmentation_III/IRM_Formaltec/New_Code/training"
+#train PC2: "C:/users/comi/Desktop/Wound_Segmentation_III/Data" "C:/Users/comi/Desktop/Wound_Segmentation_III/IRM_Formaltec/New_Code/training"
 
 
 to change to binary segmentation, change: 
 activation: softmax -> sigmoid
-loss function: cross_entropy -> bce
 segmentation: multiclass -> binary
+segmentation_classes: 15 -> 2
+
+to change to transformers:
+encoder = 'transformers' (uses a swin something at the moment, change)
 
 
 #0 = background
@@ -25,5 +28,11 @@ segmentation: multiclass -> binary
 #13 = geformter bluterguss + hautabschürfung
 #14 = thermische gewalt + hautabschürfung
 
-To effectively use a transformer model, we first perform object detection to identify the regions of interest (the wounds), and then we can crop the image based on these ROIs.
-We then segment the image using a transformer
+Things that can be changed (apart from the configuration files):
+-yolo version
+-the margin used on yolo pictures to crop them
+-the probabilities of using mode = ["yolo", "resize", "background"] (preprocessing)
+-the way the weights for multiclass segmentation get calculated
+-the augmentations
+-the model itself (Unet/Unetplusplus/Deeplab/Huggingface)
+-

@@ -56,7 +56,7 @@ def main():
     valid_ids = image_ids[split_index:]
     
     #OBJECT DETECTION -> FASTER R-CNN
-    detection_model = YOLO(os.path.join(preprocessing_config["yolo_path"], "attempt_1/weights/best.pt"))
+    detection_model = YOLO(os.path.join(preprocessing_config["yolo_path"], "attempt_12/weights/best.pt"))
 
     if train_config["encoder"] != "transformer":
         preprocessing_fn = get_preprocessing_fn(train_config["encoder"], pretrained= train_config["encoder_weights"])
@@ -68,6 +68,7 @@ def main():
         mask_ids=train_ids,  # Assuming mask names match image names
         augmentation= 'train',
         preprocessing_fn= preprocessing_fn,
+        detection_model=detection_model,
         target_size= tuple(preprocessing_config["target_size"]),
         preprocessing_config = preprocessing_config,
         train_config = train_config,
@@ -77,7 +78,8 @@ def main():
     valid_dataset = Dataset(
         dir_path=path,
         image_ids=valid_ids,
-        mask_ids=valid_ids,  # Assuming mask names match image names
+        mask_ids=valid_ids,
+        detection_model=detection_model,  # Assuming mask names match image names
         augmentation='validation',
         preprocessing_fn= preprocessing_fn,
         target_size= tuple(preprocessing_config["target_size"]),
@@ -86,8 +88,8 @@ def main():
         device = DEVICE)
     
 
-    train_loader = DataLoader(train_dataset, batch_size=train_config["batch_size"], shuffle=True, num_workers= train_config["num_workers"], worker_init_fn= worker_init_fn, persistent_workers= False)
-    valid_loader = DataLoader(valid_dataset, batch_size=train_config["batch_size"], shuffle=False, num_workers= train_config["num_workers"], worker_init_fn= worker_init_fn, persistent_workers=False)
+    train_loader = DataLoader(train_dataset, batch_size=train_config["batch_size"], shuffle=True, num_workers= train_config["num_workers"], worker_init_fn= worker_init_fn, persistent_workers= True)
+    valid_loader = DataLoader(valid_dataset, batch_size=train_config["batch_size"], shuffle=False, num_workers= train_config["num_workers"], worker_init_fn= worker_init_fn, persistent_workers=True)
 
     # Define model
     if train_config["encoder"] == "transformer": #using SWIN transformer from huggingface with pretrained weights

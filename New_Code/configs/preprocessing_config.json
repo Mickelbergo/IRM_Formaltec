@@ -11,7 +11,7 @@
     },
     "wound_classes": ["background", "wound"],
     "device": "cuda",
-    "target_size": [640, 640],
+    "target_size": [256, 256],
     "segmentation": "multiclass",
-    "yolo_path": "C:/users/comi/Desktop/Wound_segmentation_III/Data/YOLO"
+    "yolo_path": "C:/users/comi/Desktop/Wound_Segmentation_III/Data/YOLO"
 }

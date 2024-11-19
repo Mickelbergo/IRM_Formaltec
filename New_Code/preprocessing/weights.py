@@ -40,7 +40,7 @@ def calculate_class_weights(class_counts, total_pixels, total_classes):
     # Inverse frequency weighting
     class_weights = {cls: total_pixels / (count + 1e-6) for cls, count in class_counts.items()}  # Avoid division by zero
     
-    max_cap = 300  # Define the maximum weight cap
+    max_cap = 50  # Define the maximum weight cap
     class_weights = {cls: min(weight, max_cap) for cls, weight in class_weights.items()}
 
     #handle missing classes
