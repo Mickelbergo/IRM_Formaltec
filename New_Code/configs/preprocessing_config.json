@@ -13,5 +13,5 @@
     "device": "cuda",
     "target_size": [640, 640],
     "segmentation": "multiclass",
-    "yolo_path": "E:/ForMalTeC/Wound_segmentation_III/Data/YOLO"
+    "yolo_path": "C:/users/comi/Desktop/Wound_segmentation_III/Data/YOLO"
 }

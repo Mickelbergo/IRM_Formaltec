@@ -1,2 +1,10 @@
 1. look at different combinations of FPN/Unet/Unetplusplus/DeepLabV3 with different encoders
 2. look if augmentation is good, for that look at Unet + Resnet101, which had good results before
+
+
+
+
+1. incorporate yolo into the pipeline
+-> it should resize the image and mask based on the predictions from our pretrained yolo network
+-> then perform the other augmentations and the rest of the pipeline as usual
+-> this will then also work for new images without labels

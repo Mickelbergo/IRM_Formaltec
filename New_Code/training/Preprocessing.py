@@ -24,50 +24,68 @@ class Dataset(BaseDataset):
         self.train_config = train_config
         self.device = device
 
+
     def detect_and_crop(self, image, mask):
-        image_tensor = K.image_to_tensor(np.array(image)).float().unsqueeze(0).to(self.device)
-        self.detection_model.to(self.device)
-        # Perform detection
-        with torch.no_grad():
-            detections = self.detection_model(image_tensor)[0]
+        if self.detection_model:
+            results = self.detection_model.predict(source=np.array(image), device=self.device, save=False)
+            detections = results[0].boxes
+            
+            if len(detections) > 0:
+                x1, y1, x2, y2 = map(int, detections.xyxy[0].cpu().numpy())
+                x1, y1 = max(0, x1), max(0, y1)
+                x2, y2 = min(image.width, x2), min(image.height, y2)
 
-        # Check if any detections are made
-        if len(detections['boxes']) > 0:
-            # Get the bounding box with the highest confidence score
-            scores = detections['scores'].cpu().numpy()
-            max_index = scores.argmax()
-            box = detections['boxes'][max_index].cpu().numpy()
-            x1, y1, x2, y2 = map(int, box)
-
-            # Ensure coordinates are within image bounds
-            x1, y1 = max(0, x1), max(0, y1)
-            x2, y2 = min(image.width, x2), min(image.height, y2)
-
-            # Crop both image and mask using the detected bounding box
-            cropped_image = image.crop((x1, y1, x2, y2)).resize(self.target_size)
-            cropped_mask = mask.crop((x1, y1, x2, y2)).resize((self.target_size), Image.NEAREST)
+                cropped_image = image.crop((x1, y1, x2, y2)).resize(self.target_size)
+                cropped_mask = mask.crop((x1, y1, x2, y2)).resize(self.target_size, Image.NEAREST)
+            else:
+                print(f"No YOLO detections found. Using full image resize.")
+                cropped_image, cropped_mask = self.resize(image, mask)
         else:
-            # No detections: perform center crop
-            print(f"No detection found for image. Performing center crop.")
-            width, height = image.size
-            new_width, new_height = 224, 224
-            left = (width - new_width) // 2
-            top = (height - new_height) // 2
-            right = left + new_width
-            bottom = top + new_height
-
-            # Crop both image and mask using the center crop
-            cropped_image = image.crop((left, top, right, bottom))
-            cropped_mask = mask.crop((left, top, right, bottom))
+            cropped_image, cropped_mask = self.resize(image, mask)
 
         return cropped_image, cropped_mask
+ 
 
+    def resize(self, image, mask):
+        """Resize image and mask to the target size."""
+        resized_image = image.resize(self.target_size)
+        resized_mask = mask.resize(self.target_size, Image.NEAREST)
+        return resized_image, resized_mask
+
+    def extract_background(self, image, mask, patch_size=(224, 224)):
+        """Extract a patch of the background (class 0) from the image."""
+        # Convert mask to a NumPy array for easier processing
+        mask_array = np.array(mask)
+
+        # Find all background pixels (label 0)
+        background_coords = np.argwhere(mask_array == 0)
+
+        if len(background_coords) == 0:
+            # If no background is found, fall back to center crop
+            print("No background found in mask. Performing center crop.")
+            return self.resize(image, mask)
+
+        # Randomly sample a background coordinate
+        random_coord = random.choice(background_coords)
+        center_y, center_x = random_coord
+
+        # Define patch boundaries
+        half_h, half_w = patch_size[0] // 2, patch_size[1] // 2
+        x1 = max(0, center_x - half_w)
+        y1 = max(0, center_y - half_h)
+        x2 = min(image.width, center_x + half_w)
+        y2 = min(image.height, center_y + half_h)
+
+        # Crop the image and mask around the sampled background patch
+        cropped_image = image.crop((x1, y1, x2, y2)).resize(self.target_size)
+        cropped_mask = mask.crop((x1, y1, x2, y2)).resize(self.target_size, Image.NEAREST)
+
+        return cropped_image, cropped_mask
 
     def __getitem__(self, ind):
         # Load image and mask
         image_path = os.path.sep.join([self.dir_path, "new_images_640_1280", self.image_ids[ind]])
         mask_path = os.path.sep.join([self.dir_path, "new_masks_640_1280", self.mask_ids[ind]])
-
 
         image = cv2.imread(image_path, cv2.IMREAD_COLOR)
         mask = cv2.imread(mask_path, cv2.IMREAD_GRAYSCALE)
@@ -75,50 +93,59 @@ class Dataset(BaseDataset):
         if image is None or mask is None:
             raise ValueError("mask is none")
         
-        #OBJECT DETECTION
-        if self.train_config["object_detection"]:
-            # Convert NumPy arrays to PIL Images
-            image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
-            image = Image.fromarray(image)
-            mask = Image.fromarray(mask)
-            cropped_image, cropped_mask = self.detect_and_crop(image, mask)
-
-            if cropped_image is None or cropped_mask is None:
-                return None
-
-            image, mask = np.array(cropped_image), np.array(cropped_mask)
-
 
         # Convert mask to binary segmentation mask
         binary_mask = (mask > 0).astype(np.uint8)
-        
         # Convert mask values to class labels
         multiclass_mask = (mask // 15)  # Assuming mask values are wound_class * 15
-
-
         # Filter out background (class 0) and get non-background classes
         non_background_pixels = multiclass_mask[multiclass_mask != 0]
-        
-
-        # if len(non_background_pixels) > 0:
-        #     # Determine the most frequent non-background class in the mask
-        #     dominant_class = int(torch.mode(non_background_pixels.flatten())[0])
-        # else:
-        #     # Handle edge case where the mask is entirely background
-        #     dominant_class = 0
-
         dominant_class = 0
 
+
+
+        image = Image.fromarray(image)
+        binary_mask = Image.fromarray(binary_mask)
+        multiclass_mask = Image.fromarray(multiclass_mask)
+
+        mode = "resize"
+
+        if self.preprocessing_config["segmentation"] == "binary":
+            if mode == "yolo":
+                image, binary_mask= self.detect_and_crop(image, binary_mask)
+            elif mode == "resize":
+                image, binary_mask= self.resize(image, binary_mask)
+            elif mode == "background":
+                image, binary_mask= self.extract_background(image, binary_mask)
+            else:
+                raise ValueError(f"Unknown mode: {mode}")
+
+        elif self.preprocessing_config["segmentation"] == 'multiclass':
+            if mode == "yolo":
+                image, multiclass_mask = self.detect_and_crop(image, multiclass_mask)
+            elif mode == "resize":
+                image, multiclass_mask = self.resize(image, multiclass_mask)
+            elif mode == "background":
+                image, multiclass_mask = self.extract_background(image, multiclass_mask)
+            else:
+                raise ValueError(f"Unknown mode: {mode}")
+        
+        else:
+            raise ValueError(f'segmentation must either be "binary" or "multiclass"')
+
+
+        
         # Convert to tensor 
         #note that Kornia permutes the images directly, no need to manually permute
+        image = np.array(image)
+        binary_mask = np.array(binary_mask)
+        multiclass_mask = np.array(multiclass_mask)
+
         image = K.image_to_tensor(image).float().to(self.device)
         binary_mask = K.image_to_tensor(binary_mask).long().to(self.device)  # Binary mask for segmentation
         multiclass_mask = K.image_to_tensor(multiclass_mask).long().to(self.device)  # Multiclass segmentation
 
         #self.visualize_sample(image, multiclass_mask, binary_mask)
-
-
-
 
         # Apply augmentations
         if self.augmentation == 'train':
@@ -130,8 +157,6 @@ class Dataset(BaseDataset):
             if self.preprocessing_config["segmentation"] == "binary":
                 image, binary_mask = ValidationAugmentation(self.target_size, self.preprocessing_fn).augment(image, binary_mask)
             else: image, multiclass_mask = Augmentation(self.target_size, self.preprocessing_fn).augment(image, multiclass_mask)
-
-
 
         return image, binary_mask, multiclass_mask, dominant_class
     

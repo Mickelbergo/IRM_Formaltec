@@ -9,10 +9,11 @@ import torch.nn.functional as F
 import matplotlib.pyplot as plt
 from Preprocessing import Dataset
 from Epochs import TrainEpoch, ValidEpoch
-from model import UNetWithClassification, UNetWithSwinTransformer, Faster_RCNN
+from model import UNetWithClassification, UNetWithSwinTransformer
 from segmentation_models_pytorch.encoders import get_preprocessing_fn
 import ssl
 import numpy as np
+from ultralytics import YOLO
 ssl._create_default_https_context = ssl._create_unverified_context
 
 def worker_init_fn(worker_id): #initialize random seed for each worker
@@ -55,8 +56,7 @@ def main():
     valid_ids = image_ids[split_index:]
     
     #OBJECT DETECTION -> FASTER R-CNN
-    detection_model = Faster_RCNN().get_faster_rcnn().to(DEVICE)
-    detection_model.eval()
+    detection_model = YOLO(os.path.join(preprocessing_config["yolo_path"], "attempt_1/weights/best.pt"))
 
     if train_config["encoder"] != "transformer":
         preprocessing_fn = get_preprocessing_fn(train_config["encoder"], pretrained= train_config["encoder_weights"])

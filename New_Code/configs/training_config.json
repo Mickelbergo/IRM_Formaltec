@@ -1,7 +1,7 @@
 {
     "device": "cuda",
-    "path": "E:/ForMalTeC/Wound_segmentation_III/Data",
-    "preprocess_path": "E:/ForMalTeC/Wound_segmentation_III/Data",
+    "path":  "C:/users/comi/Desktop/Wound_segmentation_III/Data",
+    "preprocess_path": "C:/Users/comi/Desktop/Wound_Segmentation_III/GIT/IRM_Formaltec/New_Code/training",
     "model_version": "v1.3",
     "encoder": "timm-regnety_320",
     "encoder_weights": "imagenet",
