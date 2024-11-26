@@ -56,11 +56,11 @@ def main():
     valid_ids = image_ids[split_index:]
     
     #OBJECT DETECTION -> FASTER R-CNN
-    detection_model = YOLO(os.path.join(preprocessing_config["yolo_path"], "attempt_12/weights/best.pt"))
+    detection_model = YOLO(os.path.join(preprocessing_config["yolo_path"], "attempt_1/weights/best.pt"))
 
     if train_config["encoder"] != "transformer":
         preprocessing_fn = get_preprocessing_fn(train_config["encoder"], pretrained= train_config["encoder_weights"])
-        
+    else: preprocessing_fn = None
     # Create dataset instances
     train_dataset = Dataset(
         dir_path=path,
@@ -88,7 +88,7 @@ def main():
         device = DEVICE)
     
 
-    train_loader = DataLoader(train_dataset, batch_size=train_config["batch_size"], shuffle=True, num_workers= train_config["num_workers"], worker_init_fn= worker_init_fn, persistent_workers= True)
+    train_loader = DataLoader(train_dataset, batch_size=train_config["batch_size"], shuffle=True, num_workers= train_config["num_workers"], worker_init_fn= worker_init_fn, persistent_workers = True)
     valid_loader = DataLoader(valid_dataset, batch_size=train_config["batch_size"], shuffle=False, num_workers= train_config["num_workers"], worker_init_fn= worker_init_fn, persistent_workers=True)
 
     # Define model
@@ -105,7 +105,8 @@ def main():
 
     # Define optimizer, loss, and scheduler
     optimizer = torch.optim.Adam(model.parameters(), lr=train_config["optimizer_lr"])
-    scheduler = torch.optim.lr_scheduler.ExponentialLR(optimizer, gamma=train_config["lr_scheduler_gamma"])
+    #scheduler = torch.optim.lr_scheduler.ExponentialLR(optimizer, gamma=train_config["lr_scheduler_gamma"])
+    scheduler = torch.optim.lr_scheduler.CosineAnnealingWarmRestarts(optimizer, T_0 =100, T_mult=2, eta_min=10e-6)
     encoder = train_config["encoder"]
 
     # Define the type of segmentation, the corresponding loss function and the weights
@@ -132,8 +133,8 @@ def main():
 
     # Define training and validation epochs
     train_epoch = TrainEpoch(model, CE_Loss, DICE_Loss, segmentation, optimizer, device=DEVICE, grad_clip_value = train_config["grad_clip_value"], 
-                            display_image = display_image, nr_classes = train_config["segmentation_classes"])
-    valid_epoch = ValidEpoch(model, CE_Loss, DICE_Loss, segmentation, device=DEVICE, display_image = display_image, nr_classes = train_config["segmentation_classes"])
+                            display_image = display_image, nr_classes = train_config["segmentation_classes"], scheduler = scheduler)
+    valid_epoch = ValidEpoch(model, CE_Loss, DICE_Loss, segmentation, device=DEVICE, display_image = display_image, nr_classes = train_config["segmentation_classes"], scheduler = scheduler)
 
     # Training loop
     max_score = 0
@@ -149,11 +150,10 @@ def main():
         # Save best model
         if valid_logs['iou_score'] > max_score:
             max_score = valid_logs['iou_score']
-            torch.save(model, os.path.join(path, f"best_model_{model_version}_{epoch}_{encoder}.pth"))
+            torch.save(model.state_dict(), os.path.join(path, f"best_model_{model_version}_{epoch}_{encoder}.pth"))
             print("Best model saved!")
-        
         # Update learning rate
-        scheduler.step()
+        #scheduler.step()
 
         # Print metrics
         print(f"Train Loss: {train_logs['loss']:.4f}, Valid Loss: {valid_logs['loss']:.4f}")
@@ -161,7 +161,7 @@ def main():
         print(f"Train IoU: {train_logs['iou_score']:.4f}, Valid IoU: {valid_logs['iou_score']:.4f}")
 
     # Save the final model
-    torch.save(model, os.path.join(path, f"final_model_{model_version}_{150}_{encoder}.pth"))
+    torch.save(model.state_dict(), os.path.join(path, f"final_model_{model_version}_{150}_{encoder}.pth"))
     print("Final model saved!")
 
 if __name__ == "__main__":

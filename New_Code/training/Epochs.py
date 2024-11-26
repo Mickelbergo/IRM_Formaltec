@@ -8,7 +8,7 @@ import segmentation_models_pytorch as smp
 import torchmetrics
 
 class Epoch:
-    def __init__(self, model, CE_Loss, DICE_Loss, segmentation, stage_name, device=None, display_image=False, verbose=True, nr_classes=15):
+    def __init__(self, model, CE_Loss, DICE_Loss, segmentation, stage_name, device=None, display_image=False, verbose=True, nr_classes=15, scheduler = None):
         self.model = model
         self.CE_Loss = CE_Loss
         self.DICE_Loss = DICE_Loss
@@ -19,6 +19,7 @@ class Epoch:
         self.display_image = display_image
         self._to_device()
         self.nr_classes = nr_classes
+        self.scheduler = scheduler
 
     def _to_device(self):
         self.model.to(self.device)
@@ -86,24 +87,27 @@ class Epoch:
 
                 # Update logs with current metrics
                 logs.update({
+                    'lr': self.scheduler.get_last_lr()[0],
                     'loss': np.mean(losses),
                     'accuracy': np.mean(accs),
                     'iou_score': np.mean(iou_scores)
                 })
-
+                
+                self.scheduler.step()
+                
                 if self.verbose:
-                    iterator.set_postfix_str(f"Loss: {logs['loss']:.4f}, Acc: {logs['accuracy']:.4f}, IoU: {logs['iou_score']:.4f}")
+                    iterator.set_postfix_str(f"LR: {logs['lr']:.4f}, Loss: {logs['loss']:.4f}, Acc: {logs['accuracy']:.4f}, IoU: {logs['iou_score']:.4f}")
 
         JaccardIndex.reset()
 
         return logs
 
 class TrainEpoch(Epoch):
-    def __init__(self, model, CE_Loss, DICE_Loss=None, segmentation="binary", optimizer=None, device=None, grad_clip_value=1.0, display_image=False, verbose=True, nr_classes=15):
-        super().__init__(model, CE_Loss, DICE_Loss, segmentation, stage_name='train', device=device, display_image=display_image, verbose=verbose, nr_classes=nr_classes)
+    def __init__(self, model, CE_Loss, DICE_Loss=None, segmentation="binary", optimizer=None, device=None, grad_clip_value=1.0, display_image=False, verbose=True, nr_classes=15, scheduler = None):
+        super().__init__(model, CE_Loss, DICE_Loss, segmentation, stage_name='train', device=device, display_image=display_image, verbose=verbose, nr_classes=nr_classes, scheduler=scheduler)
         self.optimizer = optimizer
         self.grad_clip_value = grad_clip_value
-        self.scaler = torch.amp.GradScaler()  # Initialize GradScaler for mixed precision
+        self.scaler = torch.cuda.amp.GradScaler()  # Initialize GradScaler for mixed precision
 
     def on_epoch_start(self):
         self.model.train()
@@ -137,8 +141,8 @@ class TrainEpoch(Epoch):
         return loss, y_pred
 
 class ValidEpoch(Epoch):
-    def __init__(self, model, CE_Loss, DICE_Loss=None, segmentation="binary", device=None, display_image=False, verbose=True, nr_classes=15):
-        super().__init__(model, CE_Loss, DICE_Loss, segmentation, stage_name='valid', device=device, display_image=display_image, verbose=verbose, nr_classes=nr_classes)
+    def __init__(self, model, CE_Loss, DICE_Loss=None, segmentation="binary", device=None, display_image=False, verbose=True, nr_classes=15, scheduler = None):
+        super().__init__(model, CE_Loss, DICE_Loss, segmentation, stage_name='valid', device=device, display_image=display_image, verbose=verbose, nr_classes=nr_classes, scheduler=scheduler)
 
     def on_epoch_start(self):
         self.model.eval()

@@ -39,6 +39,7 @@ class Augmentation:
             image_aug = self.preprocessing_fn(image_aug)
             image_aug = torch.from_numpy(image_aug).permute(2, 0, 1).float()
         else:
+            #transformer does not use a preprocessing_fn
             image_aug = image_aug.float()
             image_aug = A.Normalize()(image=image_aug.permute(1, 2, 0).numpy())['image']
             image_aug = torch.from_numpy(image_aug).permute(2, 0, 1).float()
@@ -75,6 +76,7 @@ class ValidationAugmentation:
             image_aug = self.preprocessing_fn(image_aug)
             image_aug = torch.from_numpy(image_aug).permute(2, 0, 1).float()
         else:
+            #transformer does not use a preprocessing_fn
             image_aug = image_aug.float()
             image_aug = A.Normalize()(image=image_aug.permute(1, 2, 0).numpy())['image']
             image_aug = torch.from_numpy(image_aug).permute(2, 0, 1).float()

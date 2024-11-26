@@ -41,15 +41,17 @@ class UNetWithClassification(nn.Module):
 #transformer based
 
 class UNetDecoder(nn.Module):
-    def __init__(self, decoder_channels):
+    def __init__(self, decoder_channels, num_classes):
         super(UNetDecoder, self).__init__()
         
         self.up1 = None
         self.up2 = nn.ConvTranspose2d(decoder_channels[0], decoder_channels[1], kernel_size=2, stride=2) #increse dimension (upsampling)
         self.up3 = nn.ConvTranspose2d(decoder_channels[1], decoder_channels[2], kernel_size=2, stride=2)
         self.up4 = nn.ConvTranspose2d(decoder_channels[2], decoder_channels[3], kernel_size=2, stride=2)
-        
-        self.final_conv = nn.Conv2d(decoder_channels[3], decoder_channels[4], kernel_size=3, padding=1)
+        self.up5 = nn.ConvTranspose2d(decoder_channels[3], decoder_channels[4], kernel_size=2, stride=2)
+
+        #output number of classes
+        self.final_conv = nn.Conv2d(decoder_channels[4], num_classes, kernel_size=1) #or kernel size = 3 + padding = 1 (we do not want to lose pixels)
 
     def set_first_layer(self, in_channels, device):
         self.up1 = nn.ConvTranspose2d(in_channels, 512, kernel_size=2, stride=2).to(device)
@@ -63,12 +65,14 @@ class UNetDecoder(nn.Module):
         x = self.up2(x)
         x = self.up3(x)
         x = self.up4(x)
+        x = self.up5(x)
 
         # Final convolution
         x = self.final_conv(x)
 
         # Crop or pad the output to match the target size
         output_size = x.shape[-2:]
+        # print(f'output size: {output_size}')
         if output_size != target_size:
             x = nn.functional.interpolate(x, size=target_size, mode= "bilinear", align_corners=True)
 
@@ -77,30 +81,45 @@ class UNetDecoder(nn.Module):
 class UNetWithSwinTransformer(nn.Module):
     def __init__(self, classes=2, activation='sigmoid'):
         super(UNetWithSwinTransformer, self).__init__()
-        
+    
         # Load Swin Transformer
         self.encoder = swin_v2_b(weights=Swin_V2_B_Weights)
 
-        return_nodes = {
+
+        return_nodes = { #this gives shapes: 
             "features.0": "stage1",
-            "features.1": "stage2",
-            "features.2": "stage3",
-            "features.3": "stage4",
+            "features.2": "stage2",
+            "features.4": "stage3",
+            "features.6": "stage4",
         }
+        # this gives shapes: 
+        # stage1: torch.Size([4, 64, 64, 128])
+        # stage2: torch.Size([4, 32, 32, 256])
+        # stage3: torch.Size([4, 16, 16, 512])
+        # stage4: torch.Size([4, 8, 8, 1024])
+        #for some reason the channel dimension is switched, so we need to switch them again in the forward method
+
+
         self.feature_extractor = create_feature_extractor(self.encoder, return_nodes=return_nodes)
         
         # U-Net decoder
         self.decoder = UNetDecoder(
-            decoder_channels=[512, 256, 128, 64, 32]
+            decoder_channels=[512, 256, 128, 64, 32], 
+            num_classes=classes
         )
         
         # Final segmentation head
-        self.segmentation_head = nn.Conv2d(32, classes, kernel_size=1)
+
         self.activation = nn.Sigmoid() if activation == 'sigmoid' else nn.Softmax(dim=1)
     
     def forward(self, x):
-        target_size = x.shape[-2:]  # Store the original input size (height, width)
-        features = self.feature_extractor(x)
+        target_size = x.shape[-2:] # Store the original input size (height, width)
+
+        features = self.feature_extractor(x) #we need to switch the channel dimension to the 2nd position again
+        features = {name: feature.permute(0, 3, 1, 2) for name, feature in features.items()}
+        # for name, feature in features.items():
+        #     print(f'{name}: {feature.shape}')
+
 
         # Dynamically set the first decoder layer based on encoder output
         stage4_features = features["stage4"]
@@ -110,9 +129,7 @@ class UNetWithSwinTransformer(nn.Module):
         decoder_output = self.decoder(stage4_features, target_size=target_size)
         
         # Final segmentation output
-        segmentation_output = self.segmentation_head(decoder_output)
-        
-        return self.activation(segmentation_output)
+        return self.activation(decoder_output)
 
 class Faster_RCNN:
     def __init__(self, num_classes=2):
