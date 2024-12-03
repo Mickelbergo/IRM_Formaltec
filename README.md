@@ -35,4 +35,14 @@ Things that can be changed (apart from the configuration files):
 -the way the weights for multiclass segmentation get calculated
 -the augmentations
 -the model itself (Unet/Unetplusplus/Deeplab/Huggingface)
+-learning rate
+-optimizer
+-weights
+-
+
+
+good paramaters for swin_v2b (binary, stages 1-4):
+-weights: [1,60]
+-lr: 0.0001
+-adamW
 -

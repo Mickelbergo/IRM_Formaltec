@@ -127,7 +127,7 @@ class Dataset(BaseDataset):
 
 
         #change this if you want
-        mode = np.random.choice(["yolo", "resize", "background"], p = [0.3,0.6,0.1])
+        mode = np.random.choice(["yolo", "resize"], p = [0.2,0.8])
 
         if self.augmentation == "train":
             
@@ -179,7 +179,7 @@ class Dataset(BaseDataset):
                 image, binary_mask = ValidationAugmentation(self.target_size, self.preprocessing_fn).augment(image, binary_mask)
             else: image, multiclass_mask = Augmentation(self.target_size, self.preprocessing_fn).augment(image, multiclass_mask)
 
-        return image, binary_mask, multiclass_mask, None
+        return image, binary_mask, multiclass_mask, 0
     
 
     def __len__(self):
@@ -212,4 +212,5 @@ class Dataset(BaseDataset):
 
         plt.tight_layout()
         plt.show()
+
 

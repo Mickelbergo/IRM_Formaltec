@@ -21,8 +21,8 @@ class Augmentation:
             A.RandomBrightnessContrast(p=0.5),
             A.HueSaturationValue(p=0.5),
             A.OneOf([A.ElasticTransform(p = 0.5),
-                    A.optical_distortion(p=0.5),
-                    A.grid_distortion(p=0.5)]),
+                    A.OpticalDistortion(p=0.5),
+                    A.GridDistortion(p=0.5)]),
             ToTensorV2()
         ], additional_targets={'mask': 'mask'})
 

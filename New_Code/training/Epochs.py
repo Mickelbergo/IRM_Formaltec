@@ -59,9 +59,11 @@ class Epoch:
 
         # Initialize IoU metric
         JaccardIndex = torchmetrics.JaccardIndex(task="multiclass", num_classes=self.nr_classes).to(self.device)
-
+        LR_start = 80
+        steps = 0
         with tqdm(dataloader, desc=self.stage_name, file=sys.stdout, disable=not self.verbose) as iterator:
             for batch_idx, (x, binary_mask, multiclass_mask, _) in enumerate(iterator):
+
                 x, binary_mask, multiclass_mask = x.to(self.device), binary_mask.to(self.device), multiclass_mask.to(self.device)
 
                 if self.segmentation == "binary":
@@ -92,20 +94,22 @@ class Epoch:
                     'accuracy': np.mean(accs),
                     'iou_score': np.mean(iou_scores)
                 })
-                
-                self.scheduler.step()
+                steps+=1
+                if(steps > LR_start):
+                    self.scheduler.step()
                 
                 if self.verbose:
-                    iterator.set_postfix_str(f"LR: {logs['lr']:.4f}, Loss: {logs['loss']:.4f}, Acc: {logs['accuracy']:.4f}, IoU: {logs['iou_score']:.4f}")
+                    iterator.set_postfix_str(f"LR: {logs['lr']:.7f}, Loss: {logs['loss']:.4f}, Acc: {logs['accuracy']:.4f}, IoU: {logs['iou_score']:.4f}")
 
         JaccardIndex.reset()
 
         return logs
 
 class TrainEpoch(Epoch):
-    def __init__(self, model, CE_Loss, DICE_Loss=None, segmentation="binary", optimizer=None, device=None, grad_clip_value=1.0, display_image=False, verbose=True, nr_classes=15, scheduler = None):
+    def __init__(self, model, CE_Loss, DICE_Loss=None, segmentation="binary", optimizer=None, device=None, grad_clip_value=1.0, display_image=False, verbose=True, nr_classes=15, scheduler = None, mixed_prec = True):
         super().__init__(model, CE_Loss, DICE_Loss, segmentation, stage_name='train', device=device, display_image=display_image, verbose=verbose, nr_classes=nr_classes, scheduler=scheduler)
         self.optimizer = optimizer
+        self.mixed_prec = mixed_prec
         self.grad_clip_value = grad_clip_value
         self.scaler = torch.cuda.amp.GradScaler()  # Initialize GradScaler for mixed precision
 
@@ -114,49 +118,75 @@ class TrainEpoch(Epoch):
 
     def batch_update(self, x, mask):
         self.optimizer.zero_grad()
+        if self.mixed_prec:
+            with torch.amp.autocast(device_type = self.device):
+                # Forward pass through the model
+                y_pred = self.model(x)
+        
 
-        with torch.amp.autocast(device_type = self.device):
-            # Forward pass through the model
+                # Calculate segmentation loss
+                loss = self.CE_Loss(y_pred, mask)
+
+                # Incorporate Dice loss if provided
+                if self.DICE_Loss is not None:
+                    loss += self.DICE_Loss(y_pred, mask)
+
+            # Backward pass with scaled loss
+            self.scaler.scale(loss).backward()
+
+            # Optionally clip gradients
+            self.grad_clip_value = None
+            if self.grad_clip_value is not None:
+                self.scaler.unscale_(self.optimizer)  # Unscale gradients before clipping
+                torch.nn.utils.clip_grad_norm_(self.model.parameters(), self.grad_clip_value)
+
+            # Update the model's parameters
+            self.scaler.step(self.optimizer)
+            self.scaler.update()
+
+        #no mixed precision training
+        else:
             y_pred = self.model(x)
-
-            # Calculate segmentation loss
             loss = self.CE_Loss(y_pred, mask)
-
-            # Incorporate Dice loss if provided
             if self.DICE_Loss is not None:
                 loss += self.DICE_Loss(y_pred, mask)
-
-        # Backward pass with scaled loss
-        self.scaler.scale(loss).backward()
-
-        # Optionally clip gradients
-        if self.grad_clip_value is not None:
-            self.scaler.unscale_(self.optimizer)  # Unscale gradients before clipping
-            torch.nn.utils.clip_grad_norm_(self.model.parameters(), self.grad_clip_value)
-
-        # Update the model's parameters
-        self.scaler.step(self.optimizer)
-        self.scaler.update()
+            # Backward pass without scaling
+            loss.backward()
+            if self.grad_clip_value is not None:
+                torch.nn.utils.clip_grad_norm_(self.model.parameters(), self.grad_clip_value)
+            self.optimizer.step()
 
         return loss, y_pred
 
 class ValidEpoch(Epoch):
-    def __init__(self, model, CE_Loss, DICE_Loss=None, segmentation="binary", device=None, display_image=False, verbose=True, nr_classes=15, scheduler = None):
+    def __init__(self, model, CE_Loss, DICE_Loss=None, segmentation="binary", device=None, display_image=False, verbose=True, nr_classes=15, scheduler = None, mixed_prec = True):
         super().__init__(model, CE_Loss, DICE_Loss, segmentation, stage_name='valid', device=device, display_image=display_image, verbose=verbose, nr_classes=nr_classes, scheduler=scheduler)
+        self.mixed_prec = mixed_prec
 
     def on_epoch_start(self):
         self.model.eval()
 
     def batch_update(self, x, mask):
+ 
         with torch.no_grad():
-            with torch.amp.autocast(device_type = self.device):
-                # Forward pass through the model
-                y_pred = self.model(x)
+            if self.mixed_prec:
+                with torch.amp.autocast(device_type = self.device):
+                    # Forward pass through the model
+                    y_pred = self.model(x)
+                    # Calculate segmentation loss
+                    loss = self.CE_Loss(y_pred, mask)
 
+                    if self.DICE_Loss is not None:
+                        loss += self.DICE_Loss(y_pred, mask)
+
+            #no mixed_preciison training
+            else:
+                y_pred = self.model(x)
                 # Calculate segmentation loss
                 loss = self.CE_Loss(y_pred, mask)
 
                 if self.DICE_Loss is not None:
                     loss += self.DICE_Loss(y_pred, mask)
+
 
         return loss, y_pred

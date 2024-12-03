@@ -55,7 +55,7 @@ def main():
     train_ids = image_ids[:split_index]
     valid_ids = image_ids[split_index:]
     
-    #OBJECT DETECTION -> FASTER R-CNN
+    #OBJECT DETECTION -> YOLO
     detection_model = YOLO(os.path.join(preprocessing_config["yolo_path"], "attempt_1/weights/best.pt"))
 
     if train_config["encoder"] != "transformer":
@@ -104,16 +104,16 @@ def main():
     model = model.to(DEVICE)
 
     # Define optimizer, loss, and scheduler
-    optimizer = torch.optim.Adam(model.parameters(), lr=train_config["optimizer_lr"])
-    #scheduler = torch.optim.lr_scheduler.ExponentialLR(optimizer, gamma=train_config["lr_scheduler_gamma"])
-    scheduler = torch.optim.lr_scheduler.CosineAnnealingWarmRestarts(optimizer, T_0 =100, T_mult=2, eta_min=10e-6)
+    optimizer = torch.optim.AdamW(model.parameters(), lr=train_config["optimizer_lr"], weight_decay=1e-4)
+    scheduler = torch.optim.lr_scheduler.ExponentialLR(optimizer, gamma=train_config["lr_scheduler_gamma"])
+    #scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max =10e5 ,eta_min=10e-6)
     encoder = train_config["encoder"]
 
     # Define the type of segmentation, the corresponding loss function and the weights
 
     segmentation = preprocessing_config["segmentation"] #either 'binary' or 'multiclass'
     class_weights_multiclass = torch.load(os.path.join(path, "class_weights.pth"), weights_only= True).float().to(DEVICE)
-    class_weights = torch.tensor(train_config["class_weights"]).to(DEVICE)
+    class_weights = torch.tensor(train_config["class_weights"]).float().to(DEVICE)
 
     if segmentation == "binary": 
         CE_Loss = nn.CrossEntropyLoss(weight = class_weights) #use the predefined weights for background vs wound
@@ -131,10 +131,11 @@ def main():
         display_image = True
     else: display_image = False
 
+    mixed_prec = train_config["mixed_precision"]
     # Define training and validation epochs
     train_epoch = TrainEpoch(model, CE_Loss, DICE_Loss, segmentation, optimizer, device=DEVICE, grad_clip_value = train_config["grad_clip_value"], 
-                            display_image = display_image, nr_classes = train_config["segmentation_classes"], scheduler = scheduler)
-    valid_epoch = ValidEpoch(model, CE_Loss, DICE_Loss, segmentation, device=DEVICE, display_image = display_image, nr_classes = train_config["segmentation_classes"], scheduler = scheduler)
+                            display_image = display_image, nr_classes = train_config["segmentation_classes"], scheduler = scheduler, mixed_prec= mixed_prec)
+    valid_epoch = ValidEpoch(model, CE_Loss, DICE_Loss, segmentation, device=DEVICE, display_image = display_image, nr_classes = train_config["segmentation_classes"], scheduler = scheduler, mixed_prec=mixed_prec)
 
     # Training loop
     max_score = 0

@@ -10,7 +10,7 @@ from torchvision.models.detection.faster_rcnn import FastRCNNPredictor
 #print(smp.encoders.get_encoder_names())
 
 class UNetWithClassification(nn.Module):
-    def __init__(self, encoder_name='resnet152', encoder_weights='imagenet', classes=2, activation='sigmoid'):
+    def __init__(self, encoder_name='resnet101', encoder_weights='imagenet', classes=2, activation='sigmoid'):
         super(UNetWithClassification, self).__init__()
         if encoder_name == "mit_b5":
             
@@ -81,71 +81,65 @@ class UNetDecoder(nn.Module):
 class UNetWithSwinTransformer(nn.Module):
     def __init__(self, classes=2, activation='sigmoid'):
         super(UNetWithSwinTransformer, self).__init__()
-    
-        # Load Swin Transformer
-        self.encoder = swin_v2_b(weights=Swin_V2_B_Weights)
+        
+        # Load Swin Transformer encoder
+        self.encoder = swin_v2_b(weights=Swin_V2_B_Weights.DEFAULT)
 
-
-        return_nodes = { #this gives shapes: 
-            "features.0": "stage1",
-            "features.2": "stage2",
-            "features.4": "stage3",
-            "features.6": "stage4",
+        # Define the stages for skip connections
+        return_nodes = {
+            "features.0": "stage1",  
+            "features.2": "stage2",  
+            "features.4": "stage3",  
+            "features.6": "stage4",  
         }
-        # this gives shapes: 
-        # stage1: torch.Size([4, 64, 64, 128])
-        # stage2: torch.Size([4, 32, 32, 256])
-        # stage3: torch.Size([4, 16, 16, 512])
-        # stage4: torch.Size([4, 8, 8, 1024])
-        #for some reason the channel dimension is switched, so we need to switch them again in the forward method
-
-
         self.feature_extractor = create_feature_extractor(self.encoder, return_nodes=return_nodes)
-        
-        # U-Net decoder
-        self.decoder = UNetDecoder(
-            decoder_channels=[512, 256, 128, 64, 32], 
-            num_classes=classes
-        )
-        
-        # Final segmentation head
 
+        # Decoder channels (must align with encoder outputs)
+        self.decoder_channels = [1024, 512, 256, 128]
+        self.num_classes = classes
+
+        # U-Net decoder blocks
+        self.up4 = self._decoder_block(self.decoder_channels[0], self.decoder_channels[1])
+        self.up3 = self._decoder_block(self.decoder_channels[1], self.decoder_channels[2])
+        self.up2 = self._decoder_block(self.decoder_channels[2], self.decoder_channels[3])
+        self.up1 = self._decoder_block(self.decoder_channels[3], 64)  # 64 is the final spatial resolution
+
+        # Final segmentation layer
+        self.final_conv = nn.Conv2d(64, self.num_classes, kernel_size=1)
+
+        # Activation function
         self.activation = nn.Sigmoid() if activation == 'sigmoid' else nn.Softmax(dim=1)
-    
+
+    def _decoder_block(self, in_channels, out_channels):
+        return nn.Sequential(
+            nn.Conv2d(in_channels, out_channels, kernel_size=3, padding=1),
+            nn.ReLU(inplace=True),
+            nn.Upsample(scale_factor=2, mode='bilinear', align_corners=True)
+        )
+
     def forward(self, x):
-        target_size = x.shape[-2:] # Store the original input size (height, width)
+        # Store original input size for resizing output
+        target_size = x.shape[-2:]
 
-        features = self.feature_extractor(x) #we need to switch the channel dimension to the 2nd position again
+        # Extract features from encoder
+        features = self.feature_extractor(x)
         features = {name: feature.permute(0, 3, 1, 2) for name, feature in features.items()}
-        # for name, feature in features.items():
-        #     print(f'{name}: {feature.shape}')
 
+        # Decoder with skip connections
+        x = self.up4(features["stage4"]) + features["stage3"]
+        x = self.up3(x) + features["stage2"]
+        x = self.up2(x) + features["stage1"]
+        x = self.up1(x)
 
-        # Dynamically set the first decoder layer based on encoder output
-        stage4_features = features["stage4"]
-        self.decoder.set_first_layer(stage4_features.shape[1], device = x.device)
-        
-        # Decode and ensure the output size matches the input size
-        decoder_output = self.decoder(stage4_features, target_size=target_size)
-        
-        # Final segmentation output
-        return self.activation(decoder_output)
+        # Final segmentation layer
+        x = self.final_conv(x)
 
-class Faster_RCNN:
-    def __init__(self, num_classes=2):
-        self.num_classes = num_classes
-    
+        # Resize to match original input size
+        if x.shape[-2:] != target_size:
+            x = nn.functional.interpolate(x, size=target_size, mode='bilinear', align_corners=True)
 
-    def get_faster_rcnn(self):
-        weights = FasterRCNN_ResNet50_FPN_Weights
-
-        model = fasterrcnn_resnet50_fpn(weights=FasterRCNN_ResNet50_FPN_Weights.DEFAULT)
-        in_features = model.roi_heads.box_predictor.cls_score.in_features
-
-        model.roi_heads.box_predictor = FastRCNNPredictor(in_features, self.num_classes)
-        
-        return model
-
+        # Apply activation
+        return self.activation(x)
 
 
 # Example usage
