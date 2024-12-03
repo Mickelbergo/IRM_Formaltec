@@ -110,7 +110,11 @@ class Dataset(BaseDataset):
         # Convert mask to binary segmentation mask
         binary_mask = (mask > 0).astype(np.uint8)
         # Convert mask values to class labels
+
         multiclass_mask = (mask // 15)  # Assuming mask values are wound_class * 15
+
+        multiclass_mask[np.isin(multiclass_mask, [11, 12, 13, 14])] = 6 #this gets rid of classes 11-14. #remove this (and recalculate weights) to revert
+
         # Filter out background (class 0) and get non-background classes
         non_background_pixels = multiclass_mask[multiclass_mask != 0]
         dominant_class = 0
@@ -121,6 +125,8 @@ class Dataset(BaseDataset):
         binary_mask = Image.fromarray(binary_mask)
         multiclass_mask = Image.fromarray(multiclass_mask)
 
+
+        #change this if you want
         mode = np.random.choice(["yolo", "resize", "background"], p = [0.3,0.6,0.1])
 
         if self.augmentation == "train":
@@ -173,7 +179,7 @@ class Dataset(BaseDataset):
                 image, binary_mask = ValidationAugmentation(self.target_size, self.preprocessing_fn).augment(image, binary_mask)
             else: image, multiclass_mask = Augmentation(self.target_size, self.preprocessing_fn).augment(image, multiclass_mask)
 
-        return image, binary_mask, multiclass_mask, dominant_class
+        return image, binary_mask, multiclass_mask, None
     
 
     def __len__(self):

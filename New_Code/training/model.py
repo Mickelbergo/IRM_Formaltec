@@ -10,7 +10,7 @@ from torchvision.models.detection.faster_rcnn import FastRCNNPredictor
 #print(smp.encoders.get_encoder_names())
 
 class UNetWithClassification(nn.Module):
-    def __init__(self, encoder_name='resnet34', encoder_weights='imagenet', classes=2, activation='sigmoid'):
+    def __init__(self, encoder_name='resnet152', encoder_weights='imagenet', classes=2, activation='sigmoid'):
         super(UNetWithClassification, self).__init__()
         if encoder_name == "mit_b5":
             

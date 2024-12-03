@@ -20,6 +20,9 @@ class Augmentation:
             A.ColorJitter(brightness=0.2, contrast=0.2, saturation=0.2, hue=0.2, p=0.5),
             A.RandomBrightnessContrast(p=0.5),
             A.HueSaturationValue(p=0.5),
+            A.OneOf([A.ElasticTransform(p = 0.5),
+                    A.optical_distortion(p=0.5),
+                    A.grid_distortion(p=0.5)]),
             ToTensorV2()
         ], additional_targets={'mask': 'mask'})
 

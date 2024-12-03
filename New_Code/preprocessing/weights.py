@@ -37,18 +37,43 @@ def calculate_class_distribution(dataset):
 
 
 def calculate_class_weights(class_counts, total_pixels, total_classes):
-    # Inverse frequency weighting
-    class_weights = {cls: total_pixels / (count + 1e-6) for cls, count in class_counts.items()}  # Avoid division by zero
+    # # Inverse frequency weighting
+    # class_weights = {cls: total_pixels / (count + 1e-6) for cls, count in class_counts.items()}  # Avoid division by zero
     
-    max_cap = 50  # Define the maximum weight cap
-    class_weights = {cls: min(weight, max_cap) for cls, weight in class_weights.items()}
+    # max_cap = 100  # Define the maximum weight cap
+    # class_weights = {cls: min(weight, max_cap) for cls, weight in class_weights.items()}
 
-    #handle missing classes
-    for classes in range(total_classes):
-        if classes not in class_weights: 
-            class_weights[classes] = 0
+    # #handle missing classes
+    # for classes in range(total_classes):
+    #     if classes not in class_weights: 
+    #         class_weights[classes] = 0
+    # return class_weights
+
+    additional_weight = 50 #increase the weights of the classes by 50 (except background)
+    max_cap = 300 
+    class_weights = {}
+        # Exclude the background class from total pixel count
+    non_background_counts = {
+        cls: count for cls, count in class_counts.items() if cls != 0
+    }
+
+    # Total pixels for non-background classes
+    total_non_background_pixels = sum(non_background_counts.values())
+
+    # Calculate weights inversely proportional to class distribution
+    for cls in range(total_classes):
+        if cls in non_background_counts:
+            distribution = non_background_counts[cls] / total_non_background_pixels
+            weight = 1 / (distribution + 1e-6)  # Inverse of class distribution
+            weight = min(weight + additional_weight, max_cap)  # Add additional weight and cap
+            class_weights[cls] = weight
+        else:
+            class_weights[cls] = 0  # Assign weight 0 to missing classes
+
+    # Background class weight remains 1
+    class_weights[0] = 1
+
     return class_weights
-
 
 def plot_class_distribution(class_distribution):
     classes = list(class_distribution.keys())
