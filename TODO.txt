@@ -1,10 +1,6 @@
-1. look at different combinations of FPN/Unet/Unetplusplus/DeepLabV3 with different encoders
-2. look if augmentation is good, for that look at Unet + Resnet101, which had good results before
+using weighted cross entropy and also oversampling leads to good results on the training data (for the transformer model) but performs horribly on validation data
+check why that is
 
+for that, maybe use 2 different weights function
 
-
-
-1. incorporate yolo into the pipeline
--> it should resize the image and mask based on the predictions from our pretrained yolo network
--> then perform the other augmentations and the rest of the pipeline as usual
--> this will then also work for new images without labels
+also, some classes still have an iou score of 0, check why that is 

@@ -63,8 +63,7 @@ class Epoch:
         JaccardIndex = torchmetrics.JaccardIndex(task="multiclass", num_classes=self.nr_classes).to(self.device)
         JaccardIndex_separate = torchmetrics.JaccardIndex(task="multiclass", num_classes=self.nr_classes, average = 'none').to(self.device)
         F1Score = torchmetrics.F1Score(task="multiclass", num_classes=self.nr_classes, average='macro').to(self.device)
-        LR_start = 80
-        LR_start = 80
+        LR_start = 60
         steps = 0
         with tqdm(dataloader, desc=self.stage_name, file=sys.stdout, disable=not self.verbose) as iterator:
             for batch_idx, (x, binary_mask, multiclass_mask, _) in enumerate(iterator):

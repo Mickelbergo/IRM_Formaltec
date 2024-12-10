@@ -3,7 +3,7 @@ import torch
 import random
 import json
 import torch.nn as nn
-from torch.utils.data import DataLoader
+from torch.utils.data import DataLoader, WeightedRandomSampler
 import segmentation_models_pytorch as smp
 import torch.nn.functional as F
 import matplotlib.pyplot as plt
@@ -88,9 +88,6 @@ def main():
         device = DEVICE)
     
 
-    train_loader = DataLoader(train_dataset, batch_size=train_config["batch_size"], shuffle=True, num_workers= train_config["num_workers"], worker_init_fn= worker_init_fn, persistent_workers = True)
-    valid_loader = DataLoader(valid_dataset, batch_size=train_config["batch_size"], shuffle=False, num_workers= train_config["num_workers"], worker_init_fn= worker_init_fn, persistent_workers=True)
-
     # Define model
     if train_config["encoder"] == "transformer": #using SWIN transformer from huggingface with pretrained weights
         model = UNetWithSwinTransformer(classes = train_config["segmentation_classes"], activation = train_config["activation"])
@@ -132,6 +129,11 @@ def main():
     else: display_image = False
 
     mixed_prec = train_config["mixed_precision"]
+
+    sampler = WeightedRandomSampler(weights= class_weights_multiclass, num_samples= len(train_dataset), replacement= True)
+    train_loader = DataLoader(train_dataset, batch_size=train_config["batch_size"], shuffle=False, num_workers= train_config["num_workers"], worker_init_fn= worker_init_fn, persistent_workers = True, sampler = sampler)
+    valid_loader = DataLoader(valid_dataset, batch_size=train_config["batch_size"], shuffle=False, num_workers= train_config["num_workers"], worker_init_fn= worker_init_fn, persistent_workers=True)
+
     # Define training and validation epochs
     train_epoch = TrainEpoch(model, CE_Loss, DICE_Loss, segmentation, optimizer, device=DEVICE, grad_clip_value = train_config["grad_clip_value"], 
                             display_image = display_image, nr_classes = train_config["segmentation_classes"], scheduler = scheduler, mixed_prec= mixed_prec)

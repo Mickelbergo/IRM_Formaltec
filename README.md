@@ -42,10 +42,19 @@ Things that can be changed (apart from the configuration files):
 -weights
 -
 
-Current best model: best_model_v1.4_58_transformer
+Current best binary model: best_model_v1.4_58_transformer
 good paramaters for swin_v2b (binary, stages 1-4):
 -weights: [1,60]
 -lr: 0.0001
 -lr scheduler gamma = 0.999
 -adamW
 -num workers 10, batch size 12
+
+
+Current best multiclass model: 
+-swin_b transformer
+-lr: 0.0001
+-lr scheduler gamma = 0.999
+-adamW
+-num workers 10, batch size 16
+-
