@@ -56,9 +56,14 @@ class Epoch:
         losses = []
         accs = []
         iou_scores = []
+        per_class_ious = []
+        f1_scores = []
 
         # Initialize IoU metric
         JaccardIndex = torchmetrics.JaccardIndex(task="multiclass", num_classes=self.nr_classes).to(self.device)
+        JaccardIndex_separate = torchmetrics.JaccardIndex(task="multiclass", num_classes=self.nr_classes, average = 'none').to(self.device)
+        F1Score = torchmetrics.F1Score(task="multiclass", num_classes=self.nr_classes, average='macro').to(self.device)
+        LR_start = 80
         LR_start = 80
         steps = 0
         with tqdm(dataloader, desc=self.stage_name, file=sys.stdout, disable=not self.verbose) as iterator:
@@ -82,27 +87,34 @@ class Epoch:
                 # Record loss, accuracy, and IoU for the batch
                 losses.append(loss.item())
                 acc = (pred_mask == mask).float().mean().item()  # Accuracy
-
                 iou_score = JaccardIndex(pred_mask, mask)
+                per_class_iou = JaccardIndex_separate(pred_mask, mask)
+                f1_score = F1Score(pred_mask, mask)
+
                 accs.append(acc)
                 iou_scores.append(iou_score.item())
-
+                per_class_ious.append(per_class_iou.cpu().numpy())
+                f1_scores.append(f1_score.item())
                 # Update logs with current metrics
                 logs.update({
                     'lr': self.scheduler.get_last_lr()[0],
                     'loss': np.mean(losses),
                     'accuracy': np.mean(accs),
-                    'iou_score': np.mean(iou_scores)
+                    'iou_score': np.mean(iou_scores),
+                    'f1_score': np.mean(f1_scores)
                 })
                 steps+=1
                 if(steps > LR_start):
                     self.scheduler.step()
                 
                 if self.verbose:
-                    iterator.set_postfix_str(f"LR: {logs['lr']:.7f}, Loss: {logs['loss']:.4f}, Acc: {logs['accuracy']:.4f}, IoU: {logs['iou_score']:.4f}")
+                    iterator.set_postfix_str(f"LR: {logs['lr']:.7f}, Loss: {logs['loss']:.4f}, Acc: {logs['accuracy']:.4f}, IoU: {logs['iou_score']:.4f}, F1: {logs['f1_score']:.4f}")
 
         JaccardIndex.reset()
-
+        F1Score.reset()
+        # After the epoch, print average per-class IoU
+        mean_per_class_iou = np.mean(np.stack(per_class_ious), axis=0)  # Average over all batches
+        print(f'Per-class IoU: {mean_per_class_iou}')
         return logs
 
 class TrainEpoch(Epoch):

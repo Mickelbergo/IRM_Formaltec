@@ -151,7 +151,7 @@ def main():
         # Save best model
         if valid_logs['iou_score'] > max_score:
             max_score = valid_logs['iou_score']
-            torch.save(model.state_dict(), os.path.join(path, f"best_model_{model_version}_{epoch}_{encoder}.pth"))
+            torch.save(model.state_dict(), os.path.join(path, f"best_model_{model_version}_{epoch}_{encoder}_{segmentation}.pth"))
             print("Best model saved!")
         # Update learning rate
         #scheduler.step()
@@ -162,7 +162,7 @@ def main():
         print(f"Train IoU: {train_logs['iou_score']:.4f}, Valid IoU: {valid_logs['iou_score']:.4f}")
 
     # Save the final model
-    torch.save(model.state_dict(), os.path.join(path, f"final_model_{model_version}_{150}_{encoder}.pth"))
+    torch.save(model.state_dict(), os.path.join(path, f"final_model_{model_version}_{150}_{encoder}_{segmentation}.pth"))
     print("Final model saved!")
 
 if __name__ == "__main__":

@@ -8,6 +8,7 @@ import segmentation_models_pytorch as smp
 import json
 import matplotlib.pyplot as plt
 import model
+from model import UNetWithClassification, UNetWithSwinTransformer
 # Load configurations from the config files
 with open('New_Code/configs/training_config.json') as f:
     train_config = json.load(f)
@@ -19,7 +20,7 @@ device = torch.device(train_config["device"] if torch.cuda.is_available() else '
 print(f"Using device: {device}")
 
 # Set paths
-model_path = os.path.join(train_config["path"], f"best_model_{train_config['model_version']}_58_resnet152.pth") #this needs to be cahnged always
+model_path = os.path.join(train_config["path"], f"best_model_{train_config['model_version']}_58_transformer.pth") #this needs to be cahnged always
 image_dir = os.path.join(train_config["path"], "example_images")
 output_dir = os.path.join(train_config["path"], "example_images_segmented")
 
@@ -29,8 +30,18 @@ os.makedirs(output_dir, exist_ok=True)
 # Map 'Model' to 'model' in sys.modules if the module was named 'Model' during saving
 sys.modules['Model'] = model  # Optional: Only if needed to resolve module name discrepancies
 
-# Load the trained model directly
-model = torch.load(model_path, map_location=device)
+
+if train_config["encoder"] == "transformer": #using SWIN transformer from huggingface with pretrained weights
+    model = UNetWithSwinTransformer(classes = train_config["segmentation_classes"], activation = train_config["activation"])
+else:
+    model = UNetWithClassification(
+        encoder_name=train_config["encoder"],
+        encoder_weights=train_config["encoder_weights"],
+        classes= train_config["segmentation_classes"],  # Segmentation classes (e.g., wound vs. background),  # Replace with the actual number of wound classes
+        activation=None #crossentropy loss expects raw logits
+    )
+
+model.load_state_dict(torch.load(model_path, map_location=device))
 model = model.to(device)
 model.eval()
 print("Model loaded successfully.")

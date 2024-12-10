@@ -4,9 +4,8 @@
 
 
 to change to binary segmentation, change: 
-activation: softmax -> sigmoid
 segmentation: multiclass -> binary
-segmentation_classes: 15 -> 2
+segmentation_classes: 11 -> 2
 
 to change to transformers:
 encoder = 'transformers' (uses a swin something at the moment, change)
@@ -23,10 +22,13 @@ encoder = 'transformers' (uses a swin something at the moment, change)
 #8 = contused-lacarated / quetsch-riss Wunden (Platzwunden)
 #9 = semisharp force / Halbscharfe Gewalt
 #10 = lacerations / risswunden
-#11 = non-existent
+
+
+i got rid of these classes, they were all put to class 6
+<!-- #11 = non-existent
 #12 = ungeformter bluterguss + hautabschürfung
 #13 = geformter bluterguss + hautabschürfung
-#14 = thermische gewalt + hautabschürfung
+#14 = thermische gewalt + hautabschürfung -->
 
 Things that can be changed (apart from the configuration files):
 -yolo version
@@ -40,9 +42,10 @@ Things that can be changed (apart from the configuration files):
 -weights
 -
 
-
+Current best model: best_model_v1.4_58_transformer
 good paramaters for swin_v2b (binary, stages 1-4):
 -weights: [1,60]
 -lr: 0.0001
+-lr scheduler gamma = 0.999
 -adamW
--
+-num workers 10, batch size 12
