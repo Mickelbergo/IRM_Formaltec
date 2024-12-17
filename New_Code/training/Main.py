@@ -14,7 +14,46 @@ from segmentation_models_pytorch.encoders import get_preprocessing_fn
 import ssl
 import numpy as np
 from ultralytics import YOLO
+from kornia.losses import FocalLoss
+
 ssl._create_default_https_context = ssl._create_unverified_context
+
+def rescale_weights(original_weights, weight_range=(50, 200)):
+
+    """
+    Rescale precomputed class weights to a specified range, keeping class 0 weight fixed at 1.
+
+    Parameters:
+        original_weights (torch.Tensor or dict): Original class weights.
+        weight_range (tuple): Desired range for the scaled weights (min, max).
+
+    Returns:
+        torch.Tensor: Rescaled class weights with class 0 fixed at 1.
+    """
+    # Convert dictionary to tensor if needed
+    if isinstance(original_weights, dict):
+        original_weights = torch.tensor([original_weights[cls] for cls in sorted(original_weights.keys())])
+    
+    min_weight, max_weight = weight_range
+
+    # Ensure class 0 (background) remains fixed at 1
+    rescaled_weights = original_weights.clone()
+    non_background_weights = original_weights[1:]  # Exclude class 0
+
+    if len(non_background_weights) > 0:
+        min_original_weight = non_background_weights.min()
+        max_original_weight = non_background_weights.max()
+
+        if max_original_weight > min_original_weight:
+            rescaled_weights[1:] = (non_background_weights - min_original_weight) / (max_original_weight - min_original_weight)
+            rescaled_weights[1:] = rescaled_weights[1:] * (max_weight - min_weight) + min_weight
+        else:
+            rescaled_weights[1:] = min_weight  # Default to minimum weight if all are the same
+
+    rescaled_weights[0] = 1.0  # Fix class 0 weight at 1.0
+
+    return rescaled_weights
+
 
 def worker_init_fn(worker_id): #initialize random seed for each worker
     seed = torch.initial_seed() % 2 ** 32
@@ -109,20 +148,32 @@ def main():
     # Define the type of segmentation, the corresponding loss function and the weights
 
     segmentation = preprocessing_config["segmentation"] #either 'binary' or 'multiclass'
-    class_weights_multiclass = torch.load(os.path.join(path, "class_weights.pth"), weights_only= True).float().to(DEVICE)
-    class_weights = torch.tensor(train_config["class_weights"]).float().to(DEVICE)
+
+    print(f'Loading weights...')
+    non_scaled_weights = torch.load(os.path.join(path, "class_weights.pth"), weights_only= True).float().to(DEVICE)
+    image_weights_tensor = torch.load(os.path.join(path, "image_weights.pth"), weights_only= True).float().to(DEVICE)
+
+
+    print("initializing class weights..")
+    class_weights_multiclass = rescale_weights(non_scaled_weights, weight_range= (50,200))
+    class_weights_binary = torch.tensor(train_config["class_weights"]).float().to(DEVICE)
 
     if segmentation == "binary": 
-        CE_Loss = nn.CrossEntropyLoss(weight = class_weights) #use the predefined weights for background vs wound
+        CE_Loss = nn.CrossEntropyLoss(weight = class_weights_binary) #use the predefined weights for background vs wound
     else:
         CE_Loss = nn.CrossEntropyLoss(weight = class_weights_multiclass) 
 
     if train_config["dice"]:
         DICE_Loss = smp.losses.DiceLoss(mode = "multiclass")
-    else: 
+    else:
         DICE_Loss = None
 
-    #Segmentation loss function is either only weighted BCE or weighted BCE + DICE
+    if train_config["focal"]:
+        Focal_loss = FocalLoss(alpha = 0.5, gamma = 4.0, reduction = 'mean', weight = class_weights_multiclass)
+    else: Focal_loss = None
+    
+    lambdaa = train_config["lambda"] #hyperparameter for loss function
+    #Segmentation loss function is either only weighted BCE or weighted BCE + DICE or weighted BCE + FocalLoss
 
     if train_config["display_image"]:
         display_image = True
@@ -130,14 +181,28 @@ def main():
 
     mixed_prec = train_config["mixed_precision"]
 
-    sampler = WeightedRandomSampler(weights= class_weights_multiclass, num_samples= len(train_dataset), replacement= True)
+    if(train_config["sampler"]):
+
+        # Ensure length matches total dataset
+        assert len(image_weights_tensor) == len(image_ids), "Mismatch between image weights and dataset size!"
+
+        # Create a mapping of image IDs to their precomputed weights
+        image_id_to_weight = dict(zip(image_ids, image_weights_tensor))
+
+        # Extract weights for training and validation datasets
+        train_weights = torch.tensor([image_id_to_weight[img_id] for img_id in train_ids]).to(DEVICE)
+
+        sampler = WeightedRandomSampler(weights= train_weights, num_samples= len(train_weights), replacement= True)
+
+    else: sampler = None
+
     train_loader = DataLoader(train_dataset, batch_size=train_config["batch_size"], shuffle=False, num_workers= train_config["num_workers"], worker_init_fn= worker_init_fn, persistent_workers = True, sampler = sampler)
     valid_loader = DataLoader(valid_dataset, batch_size=train_config["batch_size"], shuffle=False, num_workers= train_config["num_workers"], worker_init_fn= worker_init_fn, persistent_workers=True)
 
     # Define training and validation epochs
-    train_epoch = TrainEpoch(model, CE_Loss, DICE_Loss, segmentation, optimizer, device=DEVICE, grad_clip_value = train_config["grad_clip_value"], 
+    train_epoch = TrainEpoch(model, CE_Loss, DICE_Loss, Focal_loss, lambdaa, segmentation, optimizer, device=DEVICE, grad_clip_value = train_config["grad_clip_value"], 
                             display_image = display_image, nr_classes = train_config["segmentation_classes"], scheduler = scheduler, mixed_prec= mixed_prec)
-    valid_epoch = ValidEpoch(model, CE_Loss, DICE_Loss, segmentation, device=DEVICE, display_image = display_image, nr_classes = train_config["segmentation_classes"], scheduler = scheduler, mixed_prec=mixed_prec)
+    valid_epoch = ValidEpoch(model, CE_Loss, DICE_Loss, Focal_loss, lambdaa, segmentation, device=DEVICE, display_image = display_image, nr_classes = train_config["segmentation_classes"], scheduler = scheduler, mixed_prec=mixed_prec)
 
     # Training loop
     max_score = 0

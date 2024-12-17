@@ -6,12 +6,52 @@ import json
 import torch
 import random
 import sys
+from tqdm import tqdm
+
 with open('New_Code/configs/training_config.json') as f:
     train_config = json.load(f)
 preprocess_path = train_config["preprocess_path"]
 
 sys.path.append(preprocess_path)
 from Preprocessing import Dataset
+
+
+def precompute_image_weights(dataset, class_weights, save_path):
+    """
+    Precompute image-level weights based on pixel class distributions and class weights.
+
+    Args:
+        dataset (Dataset): A dataset that returns (image, binary_mask, multiclass_mask, _).
+        class_weights (torch.Tensor): Tensor of class weights [num_classes].
+        save_path (str): Path to save the computed image weights.
+
+    Returns:
+        None
+    """
+    image_weights = []
+
+    print("Precomputing image weights...")
+    for i in tqdm(range(len(dataset))):
+        _, _, mask_classes, _ = dataset[i]  # Assuming the third output is the segmentation mask
+        mask = mask_classes.cpu().numpy()
+
+        # Calculate class distribution in the mask
+        unique, counts = np.unique(mask, return_counts=True)
+        class_distribution = dict(zip(unique, counts))
+
+        # Compute image weight as the weighted average of class weights
+        total_pixels = mask.size
+        image_weight = sum((class_distribution.get(cls, 0) / total_pixels) * class_weights[cls].item() 
+                           for cls in range(len(class_weights)))
+
+        image_weights.append(image_weight)
+
+    # Convert to a tensor and save
+    image_weights_tensor = torch.tensor(image_weights)
+    torch.save(image_weights_tensor, save_path)
+
+    print(f"Image weights saved to {save_path}")
+    print("Image Weights:", image_weights_tensor)
 
 
 def calculate_class_distribution(dataset):
@@ -35,106 +75,57 @@ def calculate_class_distribution(dataset):
     print(f'all classes found: {sorted(all_classes)}')
     return class_counts, class_distribution
 
-def calculate_class_weights(class_counts, total_pixels, total_classes, weight_range=(50, 200)):
+def calculate_class_weights(class_counts, total_pixels, total_classes):
     """
-    Calculate scaled class weights excluding the background (class 0), which is fixed at 1.
-    
+    Calculate the original class weights inversely proportional to class distribution.
+    Background (class 0) weight remains 1.
+
     Parameters:
         class_counts (dict): Count of pixels for each class.
         total_pixels (int): Total number of pixels in the dataset.
         total_classes (int): Total number of classes.
-        weight_range (tuple): Desired range for the scaled weights (min, max).
 
     Returns:
-        dict: Scaled class weights for all classes.
+        dict: Original class weights for all classes.
     """
-    additional_weight = 50  # Weight bias added to non-background classes
-    min_weight, max_weight = weight_range
-    class_weights = {}
-    
-    # Exclude the background class from total pixel count
-    non_background_counts = {
-        cls: count for cls, count in class_counts.items() if cls != 0
-    }
+    # class_weights = {}
 
+    # # Exclude background class (class 0) for the calculation
+    # for cls in range(total_classes):
+    #     if cls in class_counts and cls != 0:
+    #         distribution = class_counts[cls] / total_pixels
+    #         weight = 1 / (distribution + 1e-6)  # Inverse of class distribution
+    #         class_weights[cls] = weight
+    #     else:
+    #         class_weights[cls] = 1 if cls == 0 else 0  # Fixed weight for background and 0 for missing classes
+
+    # return class_weights
+
+    """
+    Precompute class weights inversely proportional to class distribution, excluding the background from total count.
+
+    Parameters:
+        class_counts (dict): Count of pixels for each class.
+        total_classes (int): Total number of classes.
+
+    Returns:
+        dict: Original class weights (inverse of class distribution), with background fixed at 1.
+    """
     # Total pixels for non-background classes
-    total_non_background_pixels = sum(non_background_counts.values())
-
-    # Calculate initial weights inversely proportional to class distribution
-    initial_weights = {}
+    total_non_background_pixels = sum(count for cls, count in class_counts.items() if cls != 0)
+    
+    class_weights = {}
     for cls in range(total_classes):
-        if cls in non_background_counts:
-            distribution = non_background_counts[cls] / total_non_background_pixels
-            weight = 1 / (distribution + 1e-6)  # Inverse of class distribution
-            initial_weights[cls] = weight
+        if cls == 0:
+            class_weights[cls] = 1.0  # Fix background weight at 1
+        elif cls in class_counts:
+            distribution = class_counts[cls] / total_non_background_pixels
+            class_weights[cls] = 1 / (distribution + 1e-6)  # Inverse class distribution
         else:
-            initial_weights[cls] = 0  # Assign weight 0 to missing classes
-
-    # Rescale weights for non-background classes
-    non_background_weights = [weight for cls, weight in initial_weights.items() if cls != 0]
-    if non_background_weights:
-        min_initial_weight = min(non_background_weights)
-        max_initial_weight = max(non_background_weights)
-
-        for cls in range(total_classes):
-            if cls == 0:
-                class_weights[cls] = 1  # Keep background weight fixed
-            elif cls in initial_weights:
-                if max_initial_weight > min_initial_weight:  # Avoid division by zero
-                    scaled_weight = (
-                        (initial_weights[cls] - min_initial_weight)
-                        / (max_initial_weight - min_initial_weight)
-                    ) * (max_weight - min_weight) + min_weight
-                else:
-                    scaled_weight = min_weight  # Default to minimum weight if all are the same
-                class_weights[cls] = scaled_weight
-            else:
-                class_weights[cls] = 0  # Assign weight 0 to missing classes
-    else:
-        # Handle the case where there are no non-background weights
-        for cls in range(total_classes):
-            class_weights[cls] = 1 if cls == 0 else min_weight
-
+            class_weights[cls] = 0  # Assign weight 0 to missing classes
+    
     return class_weights
 
-# def calculate_class_weights(class_counts, total_pixels, total_classes):
-#     # # Inverse frequency weighting
-#     # class_weights = {cls: total_pixels / (count + 1e-6) for cls, count in class_counts.items()}  # Avoid division by zero
-    
-#     # max_cap = 100  # Define the maximum weight cap
-#     # class_weights = {cls: min(weight, max_cap) for cls, weight in class_weights.items()}
-
-#     # #handle missing classes
-#     # for classes in range(total_classes):
-#     #     if classes not in class_weights: 
-#     #         class_weights[classes] = 0
-#     # return class_weights
-
-#     additional_weight = 50 #increase the weights of the classes by 50 (except background)
-#     max_cap = 100 
-#     class_weights = {}
-#         # Exclude the background class from total pixel count
-#     non_background_counts = {
-#         cls: count for cls, count in class_counts.items() if cls != 0
-#     }
-
-#     # Total pixels for non-background classes
-#     total_non_background_pixels = sum(non_background_counts.values())
-
-#     # Calculate weights inversely proportional to class distribution
-#     for cls in range(total_classes):
-#         if cls in non_background_counts:
-#             distribution = non_background_counts[cls] / total_non_background_pixels
-#             weight = 1 / (distribution + 1e-6)  # Inverse of class distribution
-#             weight = min(weight + additional_weight, max_cap)  # Add additional weight and cap
-#             class_weights[cls] = weight
-#         else:
-#             class_weights[cls] = 0  # Assign weight 0 to missing classes
-
-#     # Background class weight remains 1
-#     class_weights[0] = 1
-
-#     return class_weights
 
 def plot_class_distribution(class_distribution):
     classes = list(class_distribution.keys())
@@ -195,26 +186,36 @@ full_dataset = Dataset(
 
 # Class weights file path
 class_weights_path = os.path.join(path, "class_weights.pth")
+image_weights_path = os.path.join(path, "image_weights.pth")
+
 
 # Check if class weights are already saved
 if os.path.exists(class_weights_path):
     print(f"Loading class weights from {class_weights_path}")
     class_weights_tensor = load_class_weights(class_weights_path).to(DEVICE)
     print(class_weights_tensor)
+
+    # Precompute and save image weights
+    precompute_image_weights(full_dataset, class_weights_tensor, image_weights_path)
+
+
 else:
     print("Calculating class weights for the whole dataset...")
     class_counts, class_distribution = calculate_class_distribution(full_dataset)
 
     # Plot class distribution (optional)
-    plot_class_distribution(class_distribution)
+    #plot_class_distribution(class_distribution)
 
     # Calculate class weights
     total_pixels = sum(class_counts.values())
     total_classes = train_config["segmentation_classes"]
     class_weights = calculate_class_weights(class_counts, total_pixels, total_classes)
-
     # Convert class weights to tensor and save them
     class_weights_tensor = torch.tensor([class_weights[cls] for cls in sorted(class_weights.keys())]).to(DEVICE)
     save_class_weights(class_weights_tensor, class_weights_path)
 
     print(f"Class weights saved to {class_weights_path}")
+    precompute_image_weights(full_dataset, class_weights_tensor, image_weights_path)
+    print(f'Image weights saved to {image_weights_path}')
+
+    print("class weights:", class_weights_tensor)

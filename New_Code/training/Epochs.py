@@ -1,17 +1,18 @@
 import torch
-import torch.nn as nn
 import numpy as np
 from tqdm import tqdm as tqdm
 import sys
 import matplotlib.pyplot as plt
-import segmentation_models_pytorch as smp
 import torchmetrics
+from collections import Counter
 
 class Epoch:
-    def __init__(self, model, CE_Loss, DICE_Loss, segmentation, stage_name, device=None, display_image=False, verbose=True, nr_classes=15, scheduler = None):
+    def __init__(self, model, CE_Loss, DICE_Loss, Focal_loss, lambdaa, segmentation, stage_name, device=None, display_image=False, verbose=True, nr_classes=15, scheduler = None):
         self.model = model
         self.CE_Loss = CE_Loss
         self.DICE_Loss = DICE_Loss
+        self.Focal_loss = Focal_loss
+        self.lambdaa = lambdaa
         self.segmentation = segmentation
         self.stage_name = stage_name
         self.verbose = verbose
@@ -26,6 +27,8 @@ class Epoch:
         self.CE_Loss.to(self.device)
         if self.DICE_Loss is not None:
             self.DICE_Loss.to(self.device)
+        if self.Focal_loss is not None:
+            self.Focal_loss.to(self.device)
 
     def display_images(self, image, ground_truth, prediction_mask):
         # Display the original image, ground truth mask, and prediction for the first image in the batch
@@ -49,6 +52,14 @@ class Epoch:
         plt.draw()
         plt.pause(0.2)
 
+    def compute_class_distribution(self, predicted_classes):
+        """Compute class distribution."""
+        class_counts = Counter(predicted_classes)
+        total = sum(class_counts.values())
+        return {cls: count / total for cls, count in sorted(class_counts.items())}
+
+
+
     def run(self, dataloader):
         self.on_epoch_start()
 
@@ -59,6 +70,7 @@ class Epoch:
         per_class_ious = []
         f1_scores = []
 
+        predicted_classes = []
         # Initialize IoU metric
         JaccardIndex = torchmetrics.JaccardIndex(task="multiclass", num_classes=self.nr_classes).to(self.device)
         JaccardIndex_separate = torchmetrics.JaccardIndex(task="multiclass", num_classes=self.nr_classes, average = 'none').to(self.device)
@@ -80,6 +92,8 @@ class Epoch:
                 # Convert predicted mask to single-channel by taking argmax
                 pred_mask = y_pred.argmax(dim=1)  # Now pred_mask is [Batch, H, W]
 
+                predicted_classes.extend(pred_mask.cpu().numpy().flatten())
+                                         
                 if self.display_image and batch_idx % 20 == 0:
                     self.display_images(x, mask, pred_mask)
 
@@ -110,15 +124,20 @@ class Epoch:
                     iterator.set_postfix_str(f"LR: {logs['lr']:.7f}, Loss: {logs['loss']:.4f}, Acc: {logs['accuracy']:.4f}, IoU: {logs['iou_score']:.4f}, F1: {logs['f1_score']:.4f}")
 
         JaccardIndex.reset()
+        JaccardIndex_separate.reset()
         F1Score.reset()
         # After the epoch, print average per-class IoU
         mean_per_class_iou = np.mean(np.stack(per_class_ious), axis=0)  # Average over all batches
         print(f'Per-class IoU: {mean_per_class_iou}')
+
+        #print(f'Class Distribution: {self.compute_class_distribution(predicted_classes)}')
+        
+
         return logs
 
 class TrainEpoch(Epoch):
-    def __init__(self, model, CE_Loss, DICE_Loss=None, segmentation="binary", optimizer=None, device=None, grad_clip_value=1.0, display_image=False, verbose=True, nr_classes=15, scheduler = None, mixed_prec = True):
-        super().__init__(model, CE_Loss, DICE_Loss, segmentation, stage_name='train', device=device, display_image=display_image, verbose=verbose, nr_classes=nr_classes, scheduler=scheduler)
+    def __init__(self, model, CE_Loss, DICE_Loss=None, Focal_loss = None, lambdaa = 1.0 ,segmentation="binary", optimizer=None, device=None, grad_clip_value=1.0, display_image=False, verbose=True, nr_classes=15, scheduler = None, mixed_prec = True):
+        super().__init__(model, CE_Loss, DICE_Loss, Focal_loss, lambdaa, segmentation, stage_name='train', device=device, display_image=display_image, verbose=verbose, nr_classes=nr_classes, scheduler=scheduler)
         self.optimizer = optimizer
         self.mixed_prec = mixed_prec
         self.grad_clip_value = grad_clip_value
@@ -140,13 +159,15 @@ class TrainEpoch(Epoch):
 
                 # Incorporate Dice loss if provided
                 if self.DICE_Loss is not None:
-                    loss += self.DICE_Loss(y_pred, mask)
+                    loss += self.lambdaa * self.DICE_Loss(y_pred, mask)
+                elif self.Focal_loss is not None:
+                    loss += self.lambdaa * self.Focal_loss(y_pred, mask)
 
             # Backward pass with scaled loss
             self.scaler.scale(loss).backward()
 
             # Optionally clip gradients
-            self.grad_clip_value = None
+            #self.grad_clip_value = None
             if self.grad_clip_value is not None:
                 self.scaler.unscale_(self.optimizer)  # Unscale gradients before clipping
                 torch.nn.utils.clip_grad_norm_(self.model.parameters(), self.grad_clip_value)
@@ -160,7 +181,10 @@ class TrainEpoch(Epoch):
             y_pred = self.model(x)
             loss = self.CE_Loss(y_pred, mask)
             if self.DICE_Loss is not None:
-                loss += self.DICE_Loss(y_pred, mask)
+                loss += self.lambdaa * self.DICE_Loss(y_pred, mask)
+            elif self.Focal_loss is not None:
+                loss += self.lambdaa *  self.Focal_loss(y_pred, mask)
+
             # Backward pass without scaling
             loss.backward()
             if self.grad_clip_value is not None:
@@ -170,8 +194,8 @@ class TrainEpoch(Epoch):
         return loss, y_pred
 
 class ValidEpoch(Epoch):
-    def __init__(self, model, CE_Loss, DICE_Loss=None, segmentation="binary", device=None, display_image=False, verbose=True, nr_classes=15, scheduler = None, mixed_prec = True):
-        super().__init__(model, CE_Loss, DICE_Loss, segmentation, stage_name='valid', device=device, display_image=display_image, verbose=verbose, nr_classes=nr_classes, scheduler=scheduler)
+    def __init__(self, model, CE_Loss, DICE_Loss=None, Focal_loss = None, lambdaa = 1.0, segmentation="binary", device=None, display_image=False, verbose=True, nr_classes=15, scheduler = None, mixed_prec = True):
+        super().__init__(model, CE_Loss, DICE_Loss, Focal_loss, lambdaa ,segmentation, stage_name='valid', device=device, display_image=display_image, verbose=verbose, nr_classes=nr_classes, scheduler=scheduler)
         self.mixed_prec = mixed_prec
 
     def on_epoch_start(self):
@@ -188,7 +212,10 @@ class ValidEpoch(Epoch):
                     loss = self.CE_Loss(y_pred, mask)
 
                     if self.DICE_Loss is not None:
-                        loss += self.DICE_Loss(y_pred, mask)
+                        loss += self.lambdaa * self.DICE_Loss(y_pred, mask)
+                    
+                    elif self.Focal_loss is not None:
+                        loss += self.lambdaa * self.Focal_loss(y_pred, mask)
 
             #no mixed_preciison training
             else:
@@ -197,7 +224,9 @@ class ValidEpoch(Epoch):
                 loss = self.CE_Loss(y_pred, mask)
 
                 if self.DICE_Loss is not None:
-                    loss += self.DICE_Loss(y_pred, mask)
+                    loss += self.lambdaa * self.DICE_Loss(y_pred, mask)
+                elif self.Focal_loss is not None:
+                    loss += self.lambdaa * self.Focal_loss(y_pred, mask)
 
 
         return loss, y_pred
