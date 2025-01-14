@@ -9,6 +9,9 @@ import json
 import matplotlib.pyplot as plt
 import model
 from model import UNetWithClassification, UNetWithSwinTransformer
+import ssl
+ssl._create_default_https_context = ssl._create_unverified_context
+
 # Load configurations from the config files
 with open('New_Code/configs/training_config.json') as f:
     train_config = json.load(f)
@@ -21,6 +24,7 @@ print(f"Using device: {device}")
 
 # Set paths
 model_path = os.path.join(train_config["path"], f"best_model_{train_config['model_version']}_58_transformer.pth") #this needs to be cahnged always
+model_path = os.path.join(train_config["path"], "best_model_v1.4_epoch29_encoder_se_resnext101_32x4d_seg_multiclass_lambda1.0_optadamw_lr0.0001_dice+ce_wr50_200_samplerTrue_iou0.2669_f10.3336.pth")
 image_dir = os.path.join(train_config["path"], "example_images")
 output_dir = os.path.join(train_config["path"], "example_images_segmented")
 
