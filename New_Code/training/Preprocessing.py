@@ -11,10 +11,23 @@ import torch.nn.functional as F
 import matplotlib.pyplot as plt
 from PIL import Image
 from transformers import AutoImageProcessor
-
+from tqdm import tqdm
 
 class Dataset(BaseDataset):
-    def __init__(self, dir_path, image_ids, mask_ids, detection_model = None, augmentation=None, preprocessing_fn = None, target_size=(640, 640), preprocessing_config = None, train_config = None, device = None):
+    def __init__(self, 
+                 dir_path, 
+                 image_ids, 
+                 mask_ids, 
+                 detection_model = None, 
+                 augmentation=None, 
+                 preprocessing_fn = None, 
+                 target_size=(640, 640), 
+                 preprocessing_config = None, 
+                 train_config = None, 
+                 device = None,
+                 classes_to_exclude = None,
+                 exclude_images_with_classes = False):
+        
         self.image_ids = image_ids
         self.mask_ids = mask_ids
         self.dir_path = dir_path
@@ -25,7 +38,54 @@ class Dataset(BaseDataset):
         self.preprocessing_config = preprocessing_config
         self.train_config = train_config
         self.device = device
+        self.classes_to_exclude = classes_to_exclude
+        self.exclude_images_with_classes = exclude_images_with_classes
 
+
+        if(self.exclude_images_with_classes):
+            self.filter_images()
+
+    def filter_images(self):
+        """
+        Filters out images that contain any of the classes specified in classes_to_exclude.
+        Updates self.image_ids and self.mask_ids in place.
+        """
+        filtered_image_ids = []
+        filtered_mask_ids = []
+        excluded_images = []
+        print("Filtering images containing classes:", self.classes_to_exclude)
+        for idx in tqdm(range(len(self.image_ids)), desc="Filtering images"):
+            image_id = self.image_ids[idx]
+            mask_id = self.mask_ids[idx]
+            mask_path = os.path.join(self.dir_path, "new_masks_640_1280", mask_id)
+            mask = cv2.imread(mask_path, cv2.IMREAD_GRAYSCALE)
+            
+            if mask is None:
+                print(f"Warning: Mask not found for image {image_id}. Skipping.")
+                continue  # Skip if mask cannot be read
+            
+            # Convert mask values to class labels
+            multiclass_mask = (mask // 15).astype(np.int32) 
+            
+            # Check if any of the classes_to_exclude are present in the mask
+            if not np.isin(self.classes_to_exclude, multiclass_mask).any():
+                # If none of the excluded classes are present, keep the image
+                filtered_image_ids.append(image_id)
+                filtered_mask_ids.append(mask_id)
+            else:
+                # Exclude the image
+                excluded_images.append(image_id)
+        
+        print(f"Excluded {len(excluded_images)} images containing classes {self.classes_to_exclude}")
+        self.image_ids = filtered_image_ids
+        self.mask_ids = filtered_mask_ids
+
+        # Optionally, save the list of excluded images for reference
+        excluded_images_path = os.path.join(self.dir_path, "excluded_images.txt")
+        with open(excluded_images_path, 'w') as f:
+            for img in excluded_images:
+                f.write(f"{img}\n")
+        print(f"List of excluded images saved to {excluded_images_path}")
 
     def detect_and_crop(self, image, mask, margin=200):
         """Detect regions using YOLO, add a margin around them, and crop image and mask."""
@@ -117,6 +177,7 @@ class Dataset(BaseDataset):
 
         multiclass_mask[np.isin(multiclass_mask, [11, 12, 13, 14])] = 6 #this gets rid of classes 11-14. #remove this (and recalculate weights) to revert
 
+
         # Filter out background (class 0) and get non-background classes
         non_background_pixels = multiclass_mask[multiclass_mask != 0]
         dominant_class = 0
@@ -155,9 +216,8 @@ class Dataset(BaseDataset):
             
             else:
                 raise ValueError(f'segmentation must either be "binary" or "multiclass"')
-
-
-        
+            
+       
         # Convert to tensor 
         #note that Kornia permutes the images directly, no need to manually permute
         image = np.array(image)
@@ -409,7 +469,7 @@ class TransformerDataset(BaseDataset):
         labels = encoding["labels"].squeeze()              # shape: (H, W)
 
         # 6) Apply additional augmentations if necessary
-        # If your augmentations.py expects tensors, apply them after processor
+        # If augmentations.py expects tensors, apply them after processor
         if self.augmentation == "train":
             if self.preprocessing_config and self.preprocessing_config.get("segmentation") == "binary":
                 pixel_values, labels = Augmentation(

@@ -14,6 +14,8 @@ from segmentation_models_pytorch.encoders import get_preprocessing_fn
 import ssl
 import numpy as np
 from ultralytics import YOLO
+from kornia.losses import FocalLoss
+
 ssl._create_default_https_context = ssl._create_unverified_context
 
 def worker_init_fn(worker_id): #initialize random seed for each worker
@@ -56,7 +58,7 @@ def main():
     valid_ids = image_ids[split_index:]
     
     #OBJECT DETECTION -> YOLO
-    detection_model = YOLO(os.path.join(preprocessing_config["yolo_path"], "attempt_12/weights/best.pt"))
+    detection_model = YOLO(os.path.join(preprocessing_config["yolo_path"], "attempt_1/weights/best.pt"))
 
     if train_config["encoder"] != "transformer":
         preprocessing_fn = get_preprocessing_fn(train_config["encoder"], pretrained= train_config["encoder_weights"])
@@ -72,7 +74,9 @@ def main():
         target_size= tuple(preprocessing_config["target_size"]),
         preprocessing_config = preprocessing_config,
         train_config = train_config,
-        device = DEVICE)
+        device = DEVICE,
+        exclude_images_with_classes=preprocessing_config["exclude_images_with_classes"],
+        classes_to_exclude=preprocessing_config["classes_to_exclude"])
 
 
     valid_dataset = Dataset(
@@ -85,7 +89,9 @@ def main():
         target_size= tuple(preprocessing_config["target_size"]),
         preprocessing_config = preprocessing_config,
         train_config = train_config,
-        device = DEVICE)
+        device = DEVICE,
+        exclude_images_with_classes=preprocessing_config["exclude_images_with_classes"],
+        classes_to_exclude=preprocessing_config["classes_to_exclude"])
     
 
     train_loader = DataLoader(train_dataset, batch_size=train_config["batch_size"], shuffle=True, num_workers= train_config["num_workers"], worker_init_fn= worker_init_fn, persistent_workers= True)
@@ -123,6 +129,10 @@ def main():
         DICE_Loss = smp.losses.DiceLoss(mode = "multiclass")
     else: 
         DICE_Loss = None
+    if train_config["focal"]:
+        Focal_loss = FocalLoss(alpha=0.5, gamma=4.0, reduction='mean', weight=class_weights_multiclass)
+    else:
+        Focal_loss = None
 
     #Segmentation loss function is either only weighted BCE or weighted BCE + DICE
 
@@ -131,9 +141,10 @@ def main():
     else: display_image = False
 
     # Define training and validation epochs
-    train_epoch = TrainEpoch(model, CE_Loss, DICE_Loss, segmentation, optimizer, device=DEVICE, grad_clip_value = train_config["grad_clip_value"], 
-                            display_image = display_image, nr_classes = train_config["segmentation_classes"])
-    valid_epoch = ValidEpoch(model, CE_Loss, DICE_Loss, segmentation, device=DEVICE, display_image = display_image, nr_classes = train_config["segmentation_classes"])
+    
+    train_epoch = TrainEpoch(model=model, CE_Loss=CE_Loss, DICE_Loss=DICE_Loss, Focal_loss=Focal_loss, segmentation=segmentation, optimizer=optimizer, device=DEVICE, grad_clip_value = train_config["grad_clip_value"], 
+                            display_image = display_image, nr_classes = train_config["segmentation_classes"],scheduler=scheduler)
+    valid_epoch = ValidEpoch(model=model, CE_Loss = CE_Loss, DICE_Loss = DICE_Loss, Focal_loss = Focal_loss, segmentation = segmentation, device=DEVICE, display_image = display_image, nr_classes = train_config["segmentation_classes"], scheduler=scheduler)
 
     # Training loop
     max_score = 0
@@ -166,3 +177,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
