@@ -12,5 +12,6 @@
     "device": "cuda",
     "target_size": [384, 384],
     "segmentation": "multiclass",
-    "yolo_path": "C:/users/comi/Desktop/Wound_Segmentation_III/Data/YOLO" 
+    "yolo_path": "C:/users/comi/Desktop/Wound_Segmentation_III/Data/YOLO",
+    "disable_low_frequency_classes": true
 }

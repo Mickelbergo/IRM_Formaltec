@@ -23,6 +23,8 @@ encoder = 'transformers' (uses a swin something at the moment, change)
 #9 = semisharp force / Halbscharfe Gewalt
 #10 = lacerations / risswunden
 
+#3, 7 and 9 do not occur frequently, so we need an option to turn them off
+
 
 i got rid of these classes, they were all put to class 6
 <!-- #11 = non-existent
@@ -42,10 +44,7 @@ Things that can be changed (apart from the configuration files):
 -weights
 -
 
-Current best binary model: best_model_v1.4_58_transformer
-good paramaters for swin_v2b (binary, stages 1-4):
--weights: [1,60]
--lr: 0.0001
+Current best binary model: best_model_v1.4_epoch40_encoder_se_resnext101_32x4d_seg_binary_lambda1.0_optadamw_lr0.0001_dice+ce_wr50_200_samplerTrue_iou0.7582_f10.8403.pth
 -lr scheduler gamma = 0.999
 -adamW
 -num workers 10, batch size 12

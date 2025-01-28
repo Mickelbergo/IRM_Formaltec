@@ -50,7 +50,7 @@ def flip_and_resize_images_masks(image_dir, mask_dir, output_image_dir, output_m
         # Resize the image and mask to the target size (640x1280)
         if (h, w) != target_size:
             resized_image = cv2.resize(image, target_size)
-            resized_mask = cv2.resize(mask, target_size, interpolation=cv2.INTER_NEAREST)  # Nearest neighbor for masks
+            resized_mask = cv2.resize(mask, target_size , interpolation=cv2.INTER_NEAREST)  # Nearest neighbor for masks
         else:
             resized_image, resized_mask = image, mask  # If already the correct size, no resizing
 

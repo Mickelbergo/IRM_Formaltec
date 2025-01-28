@@ -198,7 +198,9 @@ if os.path.exists(class_weights_path):
     # Precompute and save image weights
     precompute_image_weights(full_dataset, class_weights_tensor, image_weights_path)
 
-
+    class_counts, class_distribution = calculate_class_distribution(full_dataset)
+    plot_class_distribution(class_distribution)
+    
 else:
     print("Calculating class weights for the whole dataset...")
     class_counts, class_distribution = calculate_class_distribution(full_dataset)
