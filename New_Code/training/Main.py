@@ -18,6 +18,34 @@ from kornia.losses import FocalLoss
 
 ssl._create_default_https_context = ssl._create_unverified_context
 
+def rescale_weights(original_weights, weight_range=(50, 200)):
+    """
+    Rescale precomputed class weights to a specified range, keeping class 0 weight fixed at 1.
+    """
+    # Convert dictionary to tensor if needed
+    if isinstance(original_weights, dict):
+        original_weights = torch.tensor([original_weights[cls] for cls in sorted(original_weights.keys())])
+    
+    min_weight, max_weight = weight_range
+
+    # Ensure class 0 (background) remains fixed at 1
+    rescaled_weights = original_weights.clone()
+    non_background_weights = original_weights[1:]  # Exclude class 0
+
+    if len(non_background_weights) > 0:
+        min_original_weight = non_background_weights.min()
+        max_original_weight = non_background_weights.max()
+
+        if max_original_weight > min_original_weight:
+            rescaled_weights[1:] = (non_background_weights - min_original_weight) / (max_original_weight - min_original_weight)
+            rescaled_weights[1:] = rescaled_weights[1:] * (max_weight - min_weight) + min_weight
+        else:
+            rescaled_weights[1:] = min_weight  # Default to minimum weight if all are the same
+
+    rescaled_weights[0] = 1.0  # Fix class 0 weight at 1.0
+
+    return rescaled_weights
+
 def worker_init_fn(worker_id): #initialize random seed for each worker
     seed = torch.initial_seed() % 2 ** 32
     np.random.seed(seed)
@@ -62,7 +90,8 @@ def main():
 
     if train_config["encoder"] != "transformer":
         preprocessing_fn = get_preprocessing_fn(train_config["encoder"], pretrained= train_config["encoder_weights"])
-        
+    else:
+        preprocessing_fn = None    
     # Create dataset instances
     train_dataset = Dataset(
         dir_path=path,
@@ -117,11 +146,17 @@ def main():
     # Define the type of segmentation, the corresponding loss function and the weights
 
     segmentation = preprocessing_config["segmentation"] #either 'binary' or 'multiclass'
-    class_weights_multiclass = torch.load(os.path.join(path, "class_weights.pth"), weights_only= True).float().to(DEVICE)
-    class_weights = torch.tensor(train_config["class_weights"]).to(DEVICE)
+    #class_weights_multiclass = torch.load(os.path.join(path, "class_weights.pth"), weights_only= True).float().to(DEVICE)
+    #class_weights = torch.tensor(train_config["class_weights"]).to(DEVICE)
+
+    weight_range = (50,200)
+    non_scaled_weights = torch.load(os.path.join(path, "class_weights.pth"), weights_only=True).float().to(DEVICE)
+    image_weights_tensor = torch.load(os.path.join(path, "image_weights.pth"), weights_only=True).float().to(DEVICE)
+    class_weights_multiclass = rescale_weights(non_scaled_weights, weight_range=weight_range)
+    class_weights_binary = torch.tensor(train_config["class_weights"]).float().to(DEVICE)
 
     if segmentation == "binary": 
-        CE_Loss = nn.CrossEntropyLoss(weight = class_weights) #use the predefined weights for background vs wound
+        CE_Loss = nn.CrossEntropyLoss(weight = class_weights_binary) #use the predefined weights for background vs wound
     else:
         CE_Loss = nn.CrossEntropyLoss(weight = class_weights_multiclass) 
 

@@ -72,7 +72,9 @@ def train_once(train_config, preprocessing_config, train_ids, valid_ids, path, p
         target_size=tuple(preprocessing_config["target_size"]),
         preprocessing_config=preprocessing_config,
         train_config=train_config,
-        device=DEVICE
+        device=DEVICE,        
+        exclude_images_with_classes=preprocessing_config["exclude_images_with_classes"],
+        classes_to_exclude=preprocessing_config["classes_to_exclude"]
     )
 
     valid_dataset = Dataset(
@@ -85,7 +87,9 @@ def train_once(train_config, preprocessing_config, train_ids, valid_ids, path, p
         target_size=tuple(preprocessing_config["target_size"]),
         preprocessing_config=preprocessing_config,
         train_config=train_config,
-        device=DEVICE
+        device=DEVICE,
+        exclude_images_with_classes=preprocessing_config["exclude_images_with_classes"],
+        classes_to_exclude=preprocessing_config["classes_to_exclude"]
     )
 
     # Define model
@@ -138,6 +142,10 @@ def train_once(train_config, preprocessing_config, train_ids, valid_ids, path, p
     if sampler_option:
         assert len(image_weights_tensor) == len(image_ids_total), "Mismatch between image weights and dataset size!"
         image_id_to_weight = dict(zip(image_ids_total, image_weights_tensor))
+
+        if(preprocessing_config["exclude_images_with_classes"]): #if we excluded some image ids, we have to take this into account for the sampler
+            train_ids = train_dataset.image_ids
+
         train_weights = torch.tensor([image_id_to_weight[img_id] for img_id in train_ids]).to(DEVICE)
         sampler = WeightedRandomSampler(weights=train_weights, num_samples=len(train_weights), replacement=True)
     else:
@@ -275,10 +283,10 @@ def main():
         lambdaa = train_config["lambda"]
         sampler_option = train_config["sampler"]
         # Define defaults if not explicitly stated in config:
-        weight_range = (50, 200)
+        weight_range = train_config["weight_range_multiclass"]
         loss_combination = 'focal+ce' if train_config["focal"] else 'dice+ce'
         lr = train_config["optimizer_lr"]
-        optimizer_choice = 'adamw'  # default if not specified
+        optimizer_choice = train_config["optimizer"]  # default if not specified
 
         best_iou, best_f1, best_model_state = train_once(
             train_config, preprocessing_config, train_ids, valid_ids, path, preprocessing_fn, detection_model, DEVICE,
