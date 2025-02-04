@@ -73,13 +73,21 @@ This can be configured in preprocessing.py but the implementation is still work 
 ## Other things that can be changed
 
 yolo version
+
 the margin used on yolo pictures to crop them (Preprocessing.py -> detect_and_crop(margin))
+
 -the probabilities of using mode = ["yolo", "resize", "background"] (preprocessing.py __get_item__)
+
 -the way the weights for multiclass segmentation get calculated (main_gridsearch -> weight_ranges)
+
 -the augmentations
+
 -the model itself (Unet/Unetplusplus/Deeplab/Huggingface) (model.py)
+
 -learning rate
+
 -optimizer
+
 -weights
 
 
@@ -88,14 +96,21 @@ the margin used on yolo pictures to crop them (Preprocessing.py -> detect_and_cr
 ### Binary
 
  best_model_v1.4_epoch40_encoder_se_resnext101_32x4d_seg_binary_lambda1.0_optadamw_lr0.0001_dice+ce_wr50_200_samplerTrue_iou0.7582_f10.8403.pth
+
 -lr scheduler gamma = 0.999
+
 -adamW
+
 -num workers 10, batch size 12
 
 ### Multiclass
 
 -swin_b transformer
+
 -lr: 0.0001
+
 -lr scheduler gamma = 0.999
+
 -adamW
+
 -num workers 10, batch size 16
