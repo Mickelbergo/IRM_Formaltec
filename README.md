@@ -1,5 +1,18 @@
 # Wound Segmentation
 
+## Description
+
+The purpose of this project is to automatically detect, classify and segment different types of forensic wounds. For that I used different kind of Convolutational neural networks and transformer networks.
+
+## Usage
+
+### In training config
+
+#### To change from binary to multiclass:
+-Change segmentation classes from 11 to 2 in training_config
+-Change segmentation to "binary" from "multiclass" in preprocessing_config
+
+-The other parameters can be tuned or turned on/off
 
 
 
