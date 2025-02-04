@@ -12,7 +12,7 @@
     "target_size": [384, 384],
     "segmentation": "multiclass",
     "yolo_path": "C:/users/comi/Desktop/Wound_Segmentation_III/Data/YOLO",
-    "exclude_images_with_classes": false,
+    "exclude_images_with_classes": true,
     "classes_to_exclude": [3, 7, 9],
     "class_names":  {
         "0": "background",
