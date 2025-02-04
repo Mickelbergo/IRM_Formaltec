@@ -127,17 +127,6 @@ for img_name in image_files:
         predicted_mask = predicted_mask.squeeze(0).cpu().numpy()    # Remove batch dimension
 
 
-
-        #if you want to dispaly the predicted masks ############################
-
-        # plt.imshow(predicted_mask, cmap='gray')
-        # plt.title('Predicted Mask')
-        # plt.show()
-        # Ensure predicted_mask is of type uint8
-
-
-
-
         # Ensure predicted_mask is of type uint8
         predicted_mask = predicted_mask.astype(np.uint8)
         print(f"Predicted mask shape: {predicted_mask.shape}")
