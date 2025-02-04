@@ -19,8 +19,8 @@
     "lambda": 5,
     "sampler": true,
     "grad_clip_value": 10,
-    "display_image": false,
-    "num_workers": 1,
+    "display_image": true,
+    "num_workers": 10,
     "object_detection": false,
     "mixed_precision": true,
     "grid_search": true
