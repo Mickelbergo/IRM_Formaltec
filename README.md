@@ -6,7 +6,24 @@ The purpose of this project is to automatically detect, classify and segment dif
 
 ## Usage
 
-### In training config
+### In config files
+
+### Change the path
+
+My current paths:
+
+my PC: 
+"C:/users/comi/Desktop/Wound_segmentation_III/Data" 
+"C:/Users/comi/Desktop/Wound_Segmentation_III/GIT/IRM_Formaltec/New_Code/training"
+
+train PC: 
+"E:/ForMalTeC/Wound_segmentation_III/Data" 
+"E:/ForMaLTeC/Wound_segmentation_III/GIT/IRM_Formaltec/New_Code/training"
+
+train PC2: 
+"C:/users/comi/Desktop/Wound_Segmentation_III/Data" 
+"C:/Users/comi/Desktop/Wound_Segmentation_III/IRM_Formaltec/New_Code/training"
+
 
 #### To change from binary to multiclass:
 -Change segmentation classes from 11 to 2 in training_config
@@ -14,7 +31,19 @@ The purpose of this project is to automatically detect, classify and segment dif
 
 -The other parameters can be tuned or turned on/off
 
+## Current classes
 
+0 = background
+1 = dermatorrhagia / ungeformter bluterguss
+2 = hematoma /geformter bluterguss
+3 = stab / stich
+4 = cut / schnitt
+5 = thermal / thermische gewalt
+6 = skin abrasion /hautabschürfung
+7 = puncture-gun shot / punktförmige-gewalt-schuss
+8 = contused-lacarated / quetsch-riss Wunden (Platzwunden)
+9 = semisharp force / Halbscharfe Gewalt
+10 = lacerations / risswunden
 
 #my PC: "C:/users/comi/Desktop/Wound_segmentation_III/Data" "C:/Users/comi/Desktop/Wound_Segmentation_III/GIT/IRM_Formaltec/New_Code/training"
 #train PC: "E:/ForMalTeC/Wound_segmentation_III/Data" "E:/ForMaLTeC/Wound_segmentation_III/GIT/IRM_Formaltec/New_Code/training"
