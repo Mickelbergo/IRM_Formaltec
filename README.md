@@ -7,7 +7,7 @@ The purpose of this project is to automatically detect, classify and segment dif
 ## Usage
 
 ### Preprocessing
-Before using the main file, first preprocessing needs to be performed by executing preprocessing.py, weights.py and yolo.py.
+Before using the main file, first preprocessing needs to be performed by executing preprocessing.py, weights.py and yolo.py (new_code/preprocessing)
 
 This resizes and saves new images, calculates weights for the differnt classes (for multiclass segmentation) and trains a yolo model to detect wounds based on bounding boxes for further augmentations afterwards
 
@@ -32,8 +32,8 @@ train PC2:
 
 
 #### To change from binary to multiclass:
--Change segmentation classes from 11 to 2 in training_config
--Change segmentation to "binary" from "multiclass" in preprocessing_config
+-Change segmentation classes from 11 to 2 in configs/training_config
+-Change segmentation to "binary" from "multiclass" in configs/preprocessing_config
 
 -The other parameters can be tuned or turned on/off
 
@@ -72,23 +72,20 @@ This can be configured in preprocessing.py but the implementation is still work 
 
 ## Other things that can be changed
 
-yolo version
+-common hyperparameters such as learning rate, optimizer, batch_size, epochs, etc. (configs/training_config.json)
 
-the margin used on yolo pictures to crop them (Preprocessing.py -> detect_and_crop(margin))
+-yolo version
 
--the probabilities of using mode = ["yolo", "resize", "background"] (preprocessing.py __get_item__)
+-the margin used on yolo pictures to crop them (Preprocessing.py -> detect_and_crop(margin))
 
--the way the weights for multiclass segmentation get calculated (main_gridsearch -> weight_ranges)
+-the probabilities of using mode = ["yolo", "resize", "background"] (training/preprocessing.py __get_item__)
 
--the augmentations
+-the way the weights for multiclass segmentation get calculated (training/main_gridsearch -> weight_ranges)
 
--the model itself (Unet/Unetplusplus/Deeplab/Huggingface) (model.py)
+-the augmentations (training/augmentations.py)
 
--learning rate
+-the model itself (Unet/Unetplusplus/Deeplab/Huggingface) (training/model.py)
 
--optimizer
-
--weights
 
 
 ## Current best models
@@ -104,19 +101,7 @@ the margin used on yolo pictures to crop them (Preprocessing.py -> detect_and_cr
 -num workers 10, batch size 12
 
 ### Multiclass
-1.
--swin_b transformer
 
--lr: 0.0001
-
--lr scheduler gamma = 0.999
-
--adamW
-
--num workers 10, batch size 16
-
-
-2.
 "device": "cuda",
 "path":  "C:/users/comi/Desktop/Wound_Segmentation_III/Data" ,
 "preprocess_path": "C:/Users/comi/Desktop/Wound_Segmentation_III/IRM_Formaltec/New_Code/training",
@@ -124,7 +109,7 @@ the margin used on yolo pictures to crop them (Preprocessing.py -> detect_and_cr
 "encoder": "timm-efficientnet-l2",
 "encoder_weights": "noisy-student-475",
 "activation": null,
-"batch_size": 10,
+"batch_size": 8,
 "num_epochs": 100,
 "optimizer_lr": 0.0003,
 "optimizer": "adamw",
@@ -138,8 +123,8 @@ the margin used on yolo pictures to crop them (Preprocessing.py -> detect_and_cr
 "lambda": 5,
 "sampler": false,
 "grad_clip_value": 10,
-"display_image": true,
-"num_workers": 1,
+"display_image": false,
+"num_workers": 8,
 "object_detection": false,
 "mixed_precision": true,
 "grid_search": false
