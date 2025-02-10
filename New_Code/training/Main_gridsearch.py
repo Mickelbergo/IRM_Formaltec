@@ -245,11 +245,11 @@ def main():
         preprocessing_fn = None
 
     # Hyperparameter sets for grid search
-    lambdaa_values = [1.0, 3, 10]
-    sampler_options = [True, False]
+    lambdaa_values = [1.0, 3, 5,10]
+    sampler_options = [False]
     weight_ranges = [(50, 200), (70, 120), (40,250)]
     loss_combinations = ['focal+ce', 'dice+ce']
-    learning_rates = [1e-4, 5e-4, 1e-3]
+    learning_rates = [1e-4, 5e-4, 1e-3, 3e-4]
     optimizers = ['adamw', 'sgd']
 
     if train_config["grid_search"]:
