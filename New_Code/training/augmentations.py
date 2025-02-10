@@ -13,16 +13,27 @@ class Augmentation:
 
         # Define the augmentation pipeline
         self.transform = A.Compose([
+
+            #Geometric
             A.Resize(height=target_size[0], width=target_size[1]),
             A.HorizontalFlip(p=0.5),
             A.VerticalFlip(p=0.5),
             A.RandomRotate90(p=0.5),
+
+            #Photometric
             A.ColorJitter(brightness=0.2, contrast=0.2, saturation=0.2, hue=0.2, p=0.5),
             A.RandomBrightnessContrast(p=0.5),
-            A.HueSaturationValue(p=0.5),
+            A.HueSaturationValue(p=0), #this could harm rather than help
+
+            #Distortion
             A.OneOf([A.ElasticTransform(p = 0.5),
                     A.OpticalDistortion(p=0.5),
                     A.GridDistortion(p=0.5)]),
+            
+            #Occlusion/Noise
+            A.CoarseDropout(max_holes = 8,max_height = 32, max_width = 32, p =0.3),
+            A.GaussianBlur(blur_limit=(3,7), p=0.2),
+
             ToTensorV2()
         ], additional_targets={'mask': 'mask'})
 

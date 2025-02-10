@@ -18,3 +18,8 @@ gridsearch over following parameters:
 
 
 find a good way to save these parameters
+
+-use different losses with different lambdas
+-change models
+-
+-

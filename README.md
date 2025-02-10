@@ -104,7 +104,7 @@ the margin used on yolo pictures to crop them (Preprocessing.py -> detect_and_cr
 -num workers 10, batch size 12
 
 ### Multiclass
-
+1.
 -swin_b transformer
 
 -lr: 0.0001
@@ -114,3 +114,33 @@ the margin used on yolo pictures to crop them (Preprocessing.py -> detect_and_cr
 -adamW
 
 -num workers 10, batch size 16
+
+
+2.
+"device": "cuda",
+"path":  "C:/users/comi/Desktop/Wound_Segmentation_III/Data" ,
+"preprocess_path": "C:/Users/comi/Desktop/Wound_Segmentation_III/IRM_Formaltec/New_Code/training",
+"model_version": "v1.5",
+"encoder": "timm-efficientnet-l2",
+"encoder_weights": "noisy-student-475",
+"activation": null,
+"batch_size": 10,
+"num_epochs": 100,
+"optimizer_lr": 0.0003,
+"optimizer": "adamw",
+"lr_scheduler_gamma": 0.999,
+"metrics": ["accuracy", "iou_score"],
+"segmentation_classes": 11,
+"class_weights": [1,60],
+"weight_range_multiclass": [50,200],
+"dice": true,
+"focal": false,
+"lambda": 5,
+"sampler": false,
+"grad_clip_value": 10,
+"display_image": true,
+"num_workers": 1,
+"object_detection": false,
+"mixed_precision": true,
+"grid_search": false
+
