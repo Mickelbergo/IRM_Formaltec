@@ -87,7 +87,7 @@ class Dataset(BaseDataset):
                 f.write(f"{img}\n")
         print(f"List of excluded images saved to {excluded_images_path}")
 
-    def detect_and_crop(self, image, mask, margin=200):
+    def detect_and_crop(self, image, mask, margin=200): #freely change the margin
         """Detect regions using YOLO, add a margin around them, and crop image and mask."""
         if self.detection_model:
             results = self.detection_model.predict(source=np.array(image), device=self.device, save=False, verbose=False)
@@ -189,7 +189,7 @@ class Dataset(BaseDataset):
         multiclass_mask = Image.fromarray(multiclass_mask)
 
 
-        #change this if you want
+        #change this if you want, with probability p[0], a cropped wound image is used and with p[1] the original image is used
         mode = np.random.choice(["yolo", "resize"], p = [0.2,0.8])
 
         if self.augmentation == "train":

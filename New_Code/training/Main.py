@@ -15,7 +15,6 @@ import ssl
 import numpy as np
 from ultralytics import YOLO
 from kornia.losses import FocalLoss
-
 ssl._create_default_https_context = ssl._create_unverified_context
 
 def rescale_weights(original_weights, weight_range=(50, 200)):

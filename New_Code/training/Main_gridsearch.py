@@ -282,12 +282,10 @@ def main():
         # Run a single training session with the original hyperparameters
         lambdaa = train_config["lambda"]
         sampler_option = train_config["sampler"]
-        # Define defaults if not explicitly stated in config:
         weight_range = train_config["weight_range_multiclass"]
         loss_combination = 'focal+ce' if train_config["focal"] else 'dice+ce'
         lr = train_config["optimizer_lr"]
-        optimizer_choice = train_config["optimizer"]  # default if not specified
-
+        optimizer_choice = train_config["optimizer"]
         best_iou, best_f1, best_model_state = train_once(
             train_config, preprocessing_config, train_ids, valid_ids, path, preprocessing_fn, detection_model, DEVICE,
             lambdaa, sampler_option, weight_range, loss_combination, lr, optimizer_choice, grid_search=False

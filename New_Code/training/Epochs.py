@@ -75,8 +75,10 @@ class Epoch:
         JaccardIndex = torchmetrics.JaccardIndex(task="multiclass", num_classes=self.nr_classes).to(self.device)
         JaccardIndex_separate = torchmetrics.JaccardIndex(task="multiclass", num_classes=self.nr_classes, average = 'none').to(self.device)
         F1Score = torchmetrics.F1Score(task="multiclass", num_classes=self.nr_classes, average='macro').to(self.device)
-        LR_start = 60
+
+        LR_start = 60 #burn-in period, change freely
         steps = 0
+
         with tqdm(dataloader, desc=self.stage_name, file=sys.stdout, disable=not self.verbose) as iterator:
             for batch_idx, (x, binary_mask, multiclass_mask, _) in enumerate(iterator):
 
@@ -142,6 +144,7 @@ class TrainEpoch(Epoch):
         self.mixed_prec = mixed_prec
         self.grad_clip_value = grad_clip_value
         self.scaler = torch.cuda.amp.GradScaler()  # Initialize GradScaler for mixed precision
+        #makes training way faster
 
     def on_epoch_start(self):
         self.model.train()
@@ -153,7 +156,6 @@ class TrainEpoch(Epoch):
                 # Forward pass through the model
                 y_pred = self.model(x)
         
-
                 # Calculate segmentation loss
                 loss = self.CE_Loss(y_pred, mask)
 

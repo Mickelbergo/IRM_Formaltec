@@ -3,7 +3,7 @@
     "path":  "C:/users/comi/Desktop/Wound_Segmentation_III/Data" ,
     "preprocess_path": "C:/Users/comi/Desktop/Wound_Segmentation_III/IRM_Formaltec/New_Code/training",
     "model_version": "v1.5",
-    "encoder": "se_resnext101_32x4d",
+    "encoder": "mit_b5",
     "encoder_weights": "imagenet",
     "activation": null,
     "batch_size": 16,
