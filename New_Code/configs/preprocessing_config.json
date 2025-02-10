@@ -1,0 +1,40 @@
+{
+    "mean": [0.485, 0.456, 0.406],
+    "std": [0.229, 0.224, 0.225],
+    "augmentation": {
+        "horizontal_flip": true,
+        "vertical_flip": true,
+        "rotation": 90,
+        "scale": [0.8, 1.2]
+    },
+    "wound_classes": ["background", "wound"],
+    "device": "cuda",
+    "target_size": [384, 384],
+    "segmentation": "multiclass",
+    "yolo_path": "C:/users/comi/Desktop/Wound_Segmentation_III/Data/YOLO",
+    "exclude_images_with_classes": true,
+    "classes_to_exclude": [3, 7, 9],
+    "class_names":  {
+        "0": "background",
+        "1": "ungeformer_bluterguss",
+        "2": "geformter_bluterguss",
+        "3": "stich", 
+        "4": "schnitt",
+        "5": "thermal",
+        "6": "skin_abrasion",
+        "7": "puncture_gun_shot",  
+        "8": "quetsch_riss_wunden",
+        "9": "Halbscharfe_gewalt",  
+        "10": "Risswunden"
+    },
+    "class_names_excluded":  {
+        "0": "background",
+        "1": "ungeformer_bluterguss",
+        "2": "geformter_bluterguss",
+        "3": "schnitt", 
+        "4": "thermal",
+        "5": "skin_abrasion",
+        "6": "quetsch_riss_wunden",
+        "7": "Risswunden"
+    }
+}

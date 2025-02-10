@@ -1,0 +1,20 @@
+
+also, some classes still have an iou score of 0, check why that is 
+
+
+performing grid search:
+calculate the original weight distribution,
+then based on the original weight distribution, calculate different ranges of weights (e..g from 50-200)
+gridsearch over following parameters:
+-weight ranges: [(10,50), (50,200), (100,300), (10,200)]
+-lambda parameters: [1,5,10,20]
+-focal + CE / dice + CE [1st, 2nd]
+-sampler / no sampler [yes, no]
+-probabilites of yolo / no yolo
+-learning rates: [0.0001, 0.0005]
+-weight decay [0.01,0.001]
+= 256 models that have to be trained for 50 epochs
+-> takes several days
+
+
+find a good way to save these parameters
