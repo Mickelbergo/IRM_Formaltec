@@ -24,7 +24,7 @@ print(f"Using device: {device}")
 
 # Set paths
 model_path = os.path.join(train_config["path"], f"best_model_{train_config['model_version']}_58_transformer.pth") #this needs to be cahnged always
-model_path = os.path.join(train_config["path"], "best_model_v1.4_epoch29_encoder_se_resnext101_32x4d_seg_multiclass_lambda1.0_optadamw_lr0.0001_dice+ce_wr50_200_samplerTrue_iou0.2669_f10.3336.pth")
+model_path = os.path.join(train_config["path"], "best_model_v1.5_epoch32_encoder_timm-efficientnet-l2_seg_multiclass_lambda5_optadamw_lr0.0003_dice+ce_wr50_200_samplerFalse_iou0.4858_f10.5855.pth")
 image_dir = os.path.join(train_config["path"], "example_images")
 output_dir = os.path.join(train_config["path"], "example_images_segmented")
 

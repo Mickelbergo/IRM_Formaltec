@@ -10,8 +10,8 @@
     "wound_classes": ["background", "wound"],
     "device": "cuda",
     "target_size": [384, 384],
-    "segmentation": "multiclass",
-    "yolo_path": "C:/users/comi/Desktop/Wound_Segmentation_III/Data/YOLO",
+    "segmentation": "binary",
+    "yolo_path": "E:/projects/Wound_Segmentation_III/Data/YOLO",
     "exclude_images_with_classes": true,
     "classes_to_exclude": [3,5, 7, 9,10],
     "class_names":  {

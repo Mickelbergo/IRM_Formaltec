@@ -42,7 +42,7 @@ class Dataset(BaseDataset):
         self.exclude_images_with_classes = exclude_images_with_classes
 
 
-        if(self.exclude_images_with_classes):
+        if(self.exclude_images_with_classes and self.preprocessing_config["segmentation"] == "multiclass"):
             self.filter_images()
 
     def filter_images(self):

@@ -107,8 +107,11 @@ def train_once(train_config, preprocessing_config, train_ids, valid_ids, path, p
     # Define optimizer
     if optimizer_choice == 'adamw':
         optimizer = torch.optim.AdamW(model.parameters(), lr=lr, weight_decay=1e-4)
-    else:  # 'sgd'
+    elif optimizer_choice == "sgd":  # 'sgd'
         optimizer = torch.optim.SGD(model.parameters(), lr=lr, momentum=0.9, weight_decay=1e-4)
+    else:
+        raise ValueError("Supported optimizers: 'adamw', 'sgd' ")
+    
 
     scheduler = torch.optim.lr_scheduler.ExponentialLR(optimizer, gamma=train_config["lr_scheduler_gamma"])
     encoder = train_config["encoder"]
@@ -125,9 +128,11 @@ def train_once(train_config, preprocessing_config, train_ids, valid_ids, path, p
     if loss_combination == 'focal+ce':
         focal_loss_flag = True
         dice_loss_flag = False
-    else:  # 'dice+ce'
+    elif loss_combination == "dice+ce":  # 'dice+ce'
         focal_loss_flag = False
         dice_loss_flag = True
+    else:
+        raise ValueError("Supported loss combinations: 'focal+ce', 'dice+ce' ")
 
     if segmentation == "binary":
         CE_Loss = nn.CrossEntropyLoss(weight=class_weights_binary)

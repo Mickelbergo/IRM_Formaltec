@@ -27,9 +27,8 @@ train PC:
 "E:/ForMaLTeC/Wound_segmentation_III/GIT/IRM_Formaltec/New_Code/training"
 
 train PC2: 
-"C:/users/comi/Desktop/Wound_Segmentation_III/Data" 
-"C:/Users/comi/Desktop/Wound_Segmentation_III/IRM_Formaltec/New_Code/training"
-
+"E:/projects/Wound_Segmentation_III/Data"
+"E:/projects/Wound_Segmentation_III/IRM_Formaltec/New_Code/training"
 
 #### To change from binary to multiclass:
 -Change segmentation classes from 11 to 2 in configs/training_config
@@ -92,15 +91,39 @@ This can be configured in preprocessing.py but the implementation is still work 
 
 ### Binary
 
- best_model_v1.4_epoch40_encoder_se_resnext101_32x4d_seg_binary_lambda1.0_optadamw_lr0.0001_dice+ce_wr50_200_samplerTrue_iou0.7582_f10.8403.pth
+best_model_v1.5_epoch21_encoder_timm-efficientnet-l2_seg_binary_lambda5_optadamw_lr0.0003_dice+ce_wr50_200_samplerFalse_iou0.8005_f10.8746.pth
 
--lr scheduler gamma = 0.999
+"device": "cuda",
+"path":  "E:/projects/Wound_Segmentation_III/Data" ,
+"preprocess_path": "E:/projects/Wound_Segmentation_III/IRM_Formaltec/New_Code/training",
+"model_version": "v1.5",
+"encoder": "timm-efficientnet-l2",
+"encoder_weights": "noisy-student-475",
+"activation": null,
+"batch_size": 8,
+"num_epochs": 100,
+"optimizer_lr": 0.0003,
+"optimizer": "adamw",
+"lr_scheduler_gamma": 0.999,
+"metrics": ["accuracy", "iou_score"],
+"segmentation_classes": 2,
+"class_weights": [1,60],
+"weight_range_multiclass": [50,200],
+"dice": true,
+"focal": false,
+"lambda": 5,
+"sampler": false,
+"grad_clip_value": 10,
+"display_image": false,
+"num_workers": 8,
+"object_detection": false,
+"mixed_precision": true,
+"grid_search": false
 
--adamW
-
--num workers 10, batch size 12
 
 ### Multiclass
+
+best_model_v1.5_epoch32_encoder_timm-efficientnet-l2_seg_multiclass_lambda5_optadamw_lr0.0003_dice+ce_wr50_200_samplerFalse_iou0.4858_f10.5855.pth
 
 "device": "cuda",
 "path":  "C:/users/comi/Desktop/Wound_Segmentation_III/Data" ,
