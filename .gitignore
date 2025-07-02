@@ -1,0 +1,25 @@
+# Ignore Grad-CAM outputs
+/gradcam_outputs/
+
+# Ignore images
+/images/
+
+# Ignore legacy code
+New_Code/Legacy/
+
+# Ignore YOLO models and weights
+**/yolo*.pt
+**/YOLO/
+
+# Ignore Python cache and artifacts
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.egg-info/
+.DS_Store
+.env
+.venv
+
+# Ignore Jupyter notebook checkpoints
+.ipynb_checkpoints/ 

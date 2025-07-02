@@ -1,0 +1,154 @@
+# Wound Segmentation
+
+## Description
+
+The purpose of this project is to automatically detect, classify and segment different types of forensic wounds. For that I used different kind of Convolutational neural networks and transformer networks.
+
+## Usage
+
+### Preprocessing
+Before using the main file, first preprocessing needs to be performed by executing preprocessing.py, weights.py and yolo.py (new_code/preprocessing)
+
+This resizes and saves new images, calculates weights for the differnt classes (for multiclass segmentation) and trains a yolo model to detect wounds based on bounding boxes for further augmentations afterwards
+
+
+### In config files
+
+#### Change the path
+
+My current paths:
+
+my PC: 
+"C:/users/comi/Desktop/Wound_segmentation_III/Data" 
+"C:/Users/comi/Desktop/Wound_Segmentation_III/GIT/IRM_Formaltec/New_Code/training"
+
+train PC: 
+"E:/ForMalTeC/Wound_segmentation_III/Data" 
+"E:/ForMaLTeC/Wound_segmentation_III/GIT/IRM_Formaltec/New_Code/training"
+
+train PC2: 
+"E:/projects/Wound_Segmentation_III/Data"
+"E:/projects/Wound_Segmentation_III/IRM_Formaltec/New_Code/training"
+
+#### To change from binary to multiclass:
+-Change segmentation classes from 11 to 2 in configs/training_config
+-Change segmentation to "binary" from "multiclass" in configs/preprocessing_config
+
+-The other parameters can be tuned or turned on/off
+
+#### To change to transformers:
+To use the transformers library, simply change the encoder = "transformer" (this uses a swin_b transformer at the moment, this can be changed in the model.py)
+
+Building a self-made transformer is still in progress (in preprocessing.py TransformerDataset and in main_transformer.py)
+
+
+## Current classes
+
+0 = background
+1 = dermatorrhagia / ungeformter bluterguss
+2 = hematoma /geformter bluterguss
+3 = stab / stich
+4 = cut / schnitt
+5 = thermal / thermische gewalt
+6 = skin abrasion /hautabschürfung
+7 = puncture-gun shot / punktförmige-gewalt-schuss
+8 = contused-lacarated / quetsch-riss Wunden (Platzwunden)
+9 = semisharp force / Halbscharfe Gewalt
+10 = lacerations / risswunden
+
+### Removed classes
+
+I got rid of these classes, they were all put to class 6
+11 = non-existent
+12 = ungeformter bluterguss + hautabschürfung
+13 = geformter bluterguss + hautabschürfung
+14 = thermische gewalt + hautabschürfung -->
+
+### Merging classes
+
+Classes 3, 7 and 9 do not occur frequently, so we need an option to turn them off
+This can be configured in preprocessing.py but the implementation is still work in progress
+
+## Other things that can be changed
+
+-common hyperparameters such as learning rate, optimizer, batch_size, epochs, etc. (configs/training_config.json)
+
+-yolo version
+
+-the margin used on yolo pictures to crop them (Preprocessing.py -> detect_and_crop(margin))
+
+-the probabilities of using mode = ["yolo", "resize", "background"] (training/preprocessing.py __get_item__)
+
+-the way the weights for multiclass segmentation get calculated (training/main_gridsearch -> weight_ranges)
+
+-the augmentations (training/augmentations.py)
+
+-the model itself (Unet/Unetplusplus/Deeplab/Huggingface) (training/model.py)
+
+
+
+## Current best models
+
+### Binary
+
+best_model_v1.5_epoch21_encoder_timm-efficientnet-l2_seg_binary_lambda5_optadamw_lr0.0003_dice+ce_wr50_200_samplerFalse_iou0.8005_f10.8746.pth
+
+"device": "cuda",
+"path":  "E:/projects/Wound_Segmentation_III/Data" ,
+"preprocess_path": "E:/projects/Wound_Segmentation_III/IRM_Formaltec/New_Code/training",
+"model_version": "v1.5",
+"encoder": "timm-efficientnet-l2",
+"encoder_weights": "noisy-student-475",
+"activation": null,
+"batch_size": 8,
+"num_epochs": 100,
+"optimizer_lr": 0.0003,
+"optimizer": "adamw",
+"lr_scheduler_gamma": 0.999,
+"metrics": ["accuracy", "iou_score"],
+"segmentation_classes": 2,
+"class_weights": [1,60],
+"weight_range_multiclass": [50,200],
+"dice": true,
+"focal": false,
+"lambda": 5,
+"sampler": false,
+"grad_clip_value": 10,
+"display_image": false,
+"num_workers": 8,
+"object_detection": false,
+"mixed_precision": true,
+"grid_search": false
+
+
+### Multiclass
+
+best_model_v1.5_epoch32_encoder_timm-efficientnet-l2_seg_multiclass_lambda5_optadamw_lr0.0003_dice+ce_wr50_200_samplerFalse_iou0.4858_f10.5855.pth
+
+"device": "cuda",
+"path":  "C:/users/comi/Desktop/Wound_Segmentation_III/Data" ,
+"preprocess_path": "C:/Users/comi/Desktop/Wound_Segmentation_III/IRM_Formaltec/New_Code/training",
+"model_version": "v1.5",
+"encoder": "timm-efficientnet-l2",
+"encoder_weights": "noisy-student-475",
+"activation": null,
+"batch_size": 8,
+"num_epochs": 100,
+"optimizer_lr": 0.0003,
+"optimizer": "adamw",
+"lr_scheduler_gamma": 0.999,
+"metrics": ["accuracy", "iou_score"],
+"segmentation_classes": 11,
+"class_weights": [1,60],
+"weight_range_multiclass": [50,200],
+"dice": true,
+"focal": false,
+"lambda": 5,
+"sampler": false,
+"grad_clip_value": 10,
+"display_image": false,
+"num_workers": 8,
+"object_detection": false,
+"mixed_precision": true,
+"grid_search": false
+

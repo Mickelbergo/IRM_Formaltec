@@ -19,6 +19,18 @@ from itertools import product
 
 ssl._create_default_https_context = ssl._create_unverified_context
 
+# Utility function for config access
+# Use new structured config if available, else fallback to legacy
+
+def get_config(cfg, *keys, legacy_key=None):
+    d = cfg
+    for k in keys:
+        if isinstance(d, dict) and k in d:
+            d = d[k]
+        else:
+            return cfg.get(legacy_key or keys[-1])
+    return d
+
 def rescale_weights(original_weights, weight_range=(50, 200)):
     """
     Rescale precomputed class weights to a specified range, keeping class 0 weight fixed at 1.
@@ -69,11 +81,11 @@ def train_once(train_config, preprocessing_config, train_ids, valid_ids, path, p
         augmentation='train',
         preprocessing_fn=preprocessing_fn,
         detection_model=detection_model,
-        target_size=tuple(preprocessing_config["target_size"]),
+        target_size=tuple(get_config(preprocessing_config, "target_size")),
         preprocessing_config=preprocessing_config,
         train_config=train_config,
         device=DEVICE,
-        processor_name=preprocessing_config.get("processor_name", "nvidia/segformer-b0-finetuned-ade-512-512")
+        processor_name=get_config(preprocessing_config, "processor_name", legacy_key="nvidia/segformer-b0-finetuned-ade-512-512")
     )
 
     valid_dataset = TransformerDataset(
@@ -83,21 +95,21 @@ def train_once(train_config, preprocessing_config, train_ids, valid_ids, path, p
         detection_model=detection_model,
         augmentation='validation',
         preprocessing_fn=preprocessing_fn,
-        target_size=tuple(preprocessing_config["target_size"]),
+        target_size=tuple(get_config(preprocessing_config, "target_size")),
         preprocessing_config=preprocessing_config,
         train_config=train_config,
         device=DEVICE,
-        processor_name=preprocessing_config.get("processor_name", "nvidia/segformer-b0-finetuned-ade-512-512")
+        processor_name=get_config(preprocessing_config, "processor_name", legacy_key="nvidia/segformer-b0-finetuned-ade-512-512")
     )
 
     # Define model
-    if train_config["encoder"] == "transformer":  # using SWIN transformer
-        model = UNetWithSwinTransformer(classes=train_config["segmentation_classes"], activation=train_config["activation"])
+    if get_config(train_config, "encoder") == "transformer":  # using SWIN transformer
+        model = UNetWithSwinTransformer(classes=get_config(train_config, "segmentation_classes"), activation=get_config(train_config, "activation"))
     else:
         model = UNetWithClassification(
-            encoder_name=train_config["encoder"],
-            encoder_weights=train_config["encoder_weights"],
-            classes=train_config["segmentation_classes"],
+            encoder_name=get_config(train_config, "encoder"),
+            encoder_weights=get_config(train_config, "encoder_weights"),
+            classes=get_config(train_config, "segmentation_classes"),
             activation=None  # CrossEntropyLoss expects raw logits
         )
     model = model.to(DEVICE)
@@ -108,16 +120,16 @@ def train_once(train_config, preprocessing_config, train_ids, valid_ids, path, p
     else:  # 'sgd'
         optimizer = torch.optim.SGD(model.parameters(), lr=lr, momentum=0.9, weight_decay=1e-4)
 
-    scheduler = torch.optim.lr_scheduler.ExponentialLR(optimizer, gamma=train_config["lr_scheduler_gamma"])
-    encoder = train_config["encoder"]
-    segmentation = preprocessing_config["segmentation"]
+    scheduler = torch.optim.lr_scheduler.ExponentialLR(optimizer, gamma=get_config(train_config, "lr_scheduler_gamma"))
+    encoder = get_config(train_config, "encoder")
+    segmentation = get_config(preprocessing_config, "segmentation")
 
     # Loading weights
     non_scaled_weights = torch.load(os.path.join(path, "class_weights.pth"), map_location=DEVICE).float()
     image_weights_tensor = torch.load(os.path.join(path, "image_weights.pth"), map_location=DEVICE).float()
 
     class_weights_multiclass = rescale_weights(non_scaled_weights, weight_range=weight_range)
-    class_weights_binary = torch.tensor(train_config["class_weights"]).float().to(DEVICE)
+    class_weights_binary = torch.tensor(get_config(train_config, "class_weights")).float().to(DEVICE)
 
     # Determine loss combination
     if loss_combination == 'focal+ce':
@@ -147,18 +159,18 @@ def train_once(train_config, preprocessing_config, train_ids, valid_ids, path, p
 
     train_loader = DataLoader(
         train_dataset, 
-        batch_size=train_config["batch_size"], 
+        batch_size=get_config(train_config, "batch_size"), 
         shuffle=(sampler is None),  # Shuffle only if no sampler is used
-        num_workers=train_config["num_workers"], 
+        num_workers=get_config(train_config, "num_workers"), 
         worker_init_fn=worker_init_fn, 
         persistent_workers=True, 
         sampler=sampler
     )
     valid_loader = DataLoader(
         valid_dataset, 
-        batch_size=train_config["batch_size"], 
+        batch_size=get_config(train_config, "batch_size"), 
         shuffle=False, 
-        num_workers=train_config["num_workers"], 
+        num_workers=get_config(train_config, "num_workers"), 
         worker_init_fn=worker_init_fn, 
         persistent_workers=True
     )
@@ -166,18 +178,18 @@ def train_once(train_config, preprocessing_config, train_ids, valid_ids, path, p
     # Initialize training and validation epochs
     train_epoch = TrainEpoch(
         model, CE_Loss, DICE_Loss, Focal_loss, lambdaa, segmentation, optimizer, device=DEVICE,
-        grad_clip_value=train_config["grad_clip_value"],
-        display_image=train_config["display_image"], 
-        nr_classes=train_config["segmentation_classes"], 
+        grad_clip_value=get_config(train_config, "grad_clip_value"),
+        display_image=get_config(train_config, "display_image"), 
+        nr_classes=get_config(train_config, "segmentation_classes"), 
         scheduler=scheduler, 
-        mixed_prec=train_config["mixed_precision"]
+        mixed_prec=get_config(train_config, "mixed_precision")
     )
     valid_epoch = ValidEpoch(
         model, CE_Loss, DICE_Loss, Focal_loss, lambdaa, segmentation, device=DEVICE,
-        display_image=train_config["display_image"], 
-        nr_classes=train_config["segmentation_classes"], 
+        display_image=get_config(train_config, "display_image"), 
+        nr_classes=get_config(train_config, "segmentation_classes"), 
         scheduler=scheduler, 
-        mixed_prec=train_config["mixed_precision"]
+        mixed_prec=get_config(train_config, "mixed_precision")
     )
 
     max_score = 0.0
@@ -187,8 +199,8 @@ def train_once(train_config, preprocessing_config, train_ids, valid_ids, path, p
     # Convert weight_range to a string for naming
     wr_str = f"{weight_range[0]}_{weight_range[1]}"
 
-    for epoch in range(train_config["num_epochs"]):
-        print(f"Epoch {epoch + 1}/{train_config['num_epochs']}  (lambda={lambdaa}, sampler={sampler_option}, weights={weight_range}, loss_combo={loss_combination}, lr={lr}, opt={optimizer_choice})")
+    for epoch in range(get_config(train_config, "num_epochs")):
+        print(f"Epoch {epoch + 1}/{get_config(train_config, 'num_epochs')}  (lambda={lambdaa}, sampler={sampler_option}, weights={weight_range}, loss_combo={loss_combination}, lr={lr}, opt={optimizer_choice})")
 
         train_logs = train_epoch.run(train_loader)
         valid_logs = valid_epoch.run(valid_loader)
@@ -203,7 +215,7 @@ def train_once(train_config, preprocessing_config, train_ids, valid_ids, path, p
 
             # Save each new best model with all parameters in name
             model_filename = (
-                f"best_model_{train_config['model_version']}_epoch{epoch}_"
+                f"best_model_{get_config(train_config, 'model_version')}_epoch{epoch}_"
                 f"encoder_{encoder}_seg_{segmentation}_lambda{lambdaa}_opt{optimizer_choice}_lr{lr}_"
                 f"{loss_combination}_wr{wr_str}_sampler{sampler_option}_"
                 f"iou{current_iou:.4f}_f1{current_f1:.4f}.pth"
@@ -232,8 +244,8 @@ def main():
     print(f'Initializing Device: {DEVICE}')
 
     # Set paths
-    path = train_config["path"]
-    model_version = train_config["model_version"]
+    path = get_config(train_config, "path")
+    model_version = get_config(train_config, "model_version")
 
     # Load all image and mask paths
     image_dir = os.path.join(path, "new_images_640_1280")
@@ -251,10 +263,10 @@ def main():
     valid_ids = image_ids[split_index:]
 
     # OBJECT DETECTION -> YOLO
-    detection_model = YOLO(os.path.join(preprocessing_config["yolo_path"], "attempt_1/weights/best.pt"))
+    detection_model = YOLO(os.path.join(get_config(preprocessing_config, "yolo_path"), "attempt_1/weights/best.pt"))
 
-    if train_config["encoder"] != "transformer":
-        preprocessing_fn = get_preprocessing_fn(train_config["encoder"], pretrained=train_config["encoder_weights"])
+    if get_config(train_config, "encoder") != "transformer":
+        preprocessing_fn = get_preprocessing_fn(get_config(train_config, "encoder"), pretrained=get_config(train_config, "encoder_weights"))
     else:
         preprocessing_fn = None  # The processor handles preprocessing for transformer encoders
 
@@ -266,7 +278,7 @@ def main():
     learning_rates = [1e-4, 5e-4, 1e-3]
     optimizers = ['adamw', 'sgd']
 
-    if train_config["grid_search"]:
+    if get_config(train_config, "grid_search"):
         global_best_iou = 0.0
         global_best_f1 = 0.0
         global_best_model_state = None
@@ -294,13 +306,13 @@ def main():
 
     else:
         # Run a single training session with the original hyperparameters
-        lambdaa = train_config["lambda"]
-        sampler_option = train_config["sampler"]
+        lambdaa = get_config(train_config, "lambda")
+        sampler_option = get_config(train_config, "sampler")
         # Define defaults if not explicitly stated in config:
         weight_range = (50, 200)
-        loss_combination = 'focal+ce' if train_config.get("focal", False) else 'dice+ce'
-        lr = train_config["optimizer_lr"]
-        optimizer_choice = train_config.get("optimizer_choice", 'adamw')  # default if not specified
+        loss_combination = 'focal+ce' if get_config(train_config, "focal", False) else 'dice+ce'
+        lr = get_config(train_config, "optimizer_lr")
+        optimizer_choice = get_config(train_config, "optimizer_choice", 'adamw')  # default if not specified
 
         best_iou, best_f1, best_model_state = train_once(
             train_config, preprocessing_config, train_ids, valid_ids, path, preprocessing_fn, detection_model, DEVICE,

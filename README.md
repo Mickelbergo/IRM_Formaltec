@@ -1,154 +1,166 @@
-# Wound Segmentation
+# Automatic Segmentation and Classification of Forensic Wound images
 
-## Description
+<img src="images/example_image_2.png" alt="Project Overview" width="400"/>
 
-The purpose of this project is to automatically detect, classify and segment different types of forensic wounds. For that I used different kind of Convolutational neural networks and transformer networks.
+---
 
-## Usage
+## Project Overview
 
-### Preprocessing
-Before using the main file, first preprocessing needs to be performed by executing preprocessing.py, weights.py and yolo.py (new_code/preprocessing)
+- This project provides a robust pipeline for **automatic detection, classification, and segmentation of forensic wounds** using state-of-the-art deep learning models, including CNNs and transformers.  
+- It is designed for flexibility, reproducibility, and easy experimentation with hyperparameters and augmentations.
+- The models were trained using 2000 images of forensic wounds.
+- Models were evaluated using IoU and F1 score.
 
-This resizes and saves new images, calculates weights for the differnt classes (for multiclass segmentation) and trains a yolo model to detect wounds based on bounding boxes for further augmentations afterwards
+---
 
+## Features
 
-### In config files
+- **Configurable pipeline**: All hyperparameters, augmentations, and model settings are controlled via JSON config files.
+- **Supports multiple architectures**: UNet, UNet++, DeepLab, HuggingFace transformers (e.g., Swin).
+- **YOLO-based wound detection** for bounding box proposals and cropping (used to generate new cropped and zoomed images out of the already available images)
+- **Flexible data augmentation**: All augmentation types and probabilities are set in the config.
+- **Binary and multiclass segmentation** with easy switching.
+- **Micro/macro F1 score selection** for evaluation.
+- **Easy class merging/exclusion** for rare or unwanted classes.
 
-#### Change the path
+---
 
-My current paths:
+## Setup & Usage
 
-my PC: 
-"C:/users/comi/Desktop/Wound_segmentation_III/Data" 
-"C:/Users/comi/Desktop/Wound_Segmentation_III/GIT/IRM_Formaltec/New_Code/training"
+### 1. **Preprocessing**
 
-train PC: 
-"E:/ForMalTeC/Wound_segmentation_III/Data" 
-"E:/ForMaLTeC/Wound_segmentation_III/GIT/IRM_Formaltec/New_Code/training"
+Run the preprocessing scripts to:
+- Resize and save new images
+- Calculate class weights for segmentation
+- Train a YOLO model for wound detection
 
-train PC2: 
-"E:/projects/Wound_Segmentation_III/Data"
-"E:/projects/Wound_Segmentation_III/IRM_Formaltec/New_Code/training"
+```bash
+python New_Code/preprocessing/preprocessing.py
+python New_Code/preprocessing/weights.py
+python New_Code/preprocessing/yolo.py
+```
 
-#### To change from binary to multiclass:
--Change segmentation classes from 11 to 2 in configs/training_config
--Change segmentation to "binary" from "multiclass" in configs/preprocessing_config
+### 2. **Configuration**
 
--The other parameters can be tuned or turned on/off
+All settings are in the config files:
 
-#### To change to transformers:
-To use the transformers library, simply change the encoder = "transformer" (this uses a swin_b transformer at the moment, this can be changed in the model.py)
+- `New_Code/configs/training_config.json`
+- `New_Code/configs/preprocessing_config.json`
 
-Building a self-made transformer is still in progress (in preprocessing.py TransformerDataset and in main_transformer.py)
+**Key things to configure:**
+- **Paths**: Set your data and output directories.
+- **Segmentation mode**: `"binary"` or `"multiclass"`
+- **Model & encoder**: Choose architecture and encoder.
+- **Augmentations**: Enable/disable and tune all augmentations.
+- **Hyperparameters**: Learning rate, batch size, epochs, optimizer, etc.
+- **F1 Score Type**: Set `"f1_average": "macro"` or `"micro"` in `training_config.json`.
 
+### 3. **Training**
 
-## Current classes
+Run the main training script:
+```bash
+python New_Code/training/Main_gridsearch.py
+```
+Or, for transformer-based models:
+```bash
+python New_Code/training/Main_transformer.py
+```
 
-0 = background
-1 = dermatorrhagia / ungeformter bluterguss
-2 = hematoma /geformter bluterguss
-3 = stab / stich
-4 = cut / schnitt
-5 = thermal / thermische gewalt
-6 = skin abrasion /hautabschürfung
-7 = puncture-gun shot / punktförmige-gewalt-schuss
-8 = contused-lacarated / quetsch-riss Wunden (Platzwunden)
-9 = semisharp force / Halbscharfe Gewalt
-10 = lacerations / risswunden
+### 4. **Prediction & Evaluation**
 
-### Removed classes
+Use the prediction script to segment new images:
+```bash
+python New_Code/training/prediction.py
+```
 
-I got rid of these classes, they were all put to class 6
-11 = non-existent
-12 = ungeformter bluterguss + hautabschürfung
-13 = geformter bluterguss + hautabschürfung
-14 = thermische gewalt + hautabschürfung -->
+---
 
-### Merging classes
+## Classes
 
-Classes 3, 7 and 9 do not occur frequently, so we need an option to turn them off
-This can be configured in preprocessing.py but the implementation is still work in progress
+| ID  | Name (EN)                | Name (DE)                  |
+|-----|--------------------------|----------------------------|
+| 0   | background               | background                 |
+| 1   | dermatorrhagia           | ungeformter bluterguss     |
+| 2   | hematoma                 | geformter bluterguss       |
+| 3   | stab                     | stich                      |
+| 4   | cut                      | schnitt                    |
+| 5   | thermal                  | thermische gewalt          |
+| 6   | skin abrasion            | hautabschürfung            |
+| 7   | puncture-gun shot        | punktförmige-gewalt-schuss |
+| 8   | contused-lacerated       | quetsch-riss Wunden        |
+| 9   | semisharp force          | Halbscharfe Gewalt         |
+| 10  | lacerations              | risswunden                 |
 
-## Other things that can be changed
+**Removed classes**: 11–14 (merged into class 6)
 
--common hyperparameters such as learning rate, optimizer, batch_size, epochs, etc. (configs/training_config.json)
+**Rare classes**: 3, 7, 9 (can be excluded via config)
 
--yolo version
+---
 
--the margin used on yolo pictures to crop them (Preprocessing.py -> detect_and_crop(margin))
+## Experimentation
 
--the probabilities of using mode = ["yolo", "resize", "background"] (training/preprocessing.py __get_item__)
-
--the way the weights for multiclass segmentation get calculated (training/main_gridsearch -> weight_ranges)
-
--the augmentations (training/augmentations.py)
-
--the model itself (Unet/Unetplusplus/Deeplab/Huggingface) (training/model.py)
-
-
-
-## Current best models
-
-### Binary
-
-best_model_v1.5_epoch21_encoder_timm-efficientnet-l2_seg_binary_lambda5_optadamw_lr0.0003_dice+ce_wr50_200_samplerFalse_iou0.8005_f10.8746.pth
-
-"device": "cuda",
-"path":  "E:/projects/Wound_Segmentation_III/Data" ,
-"preprocess_path": "E:/projects/Wound_Segmentation_III/IRM_Formaltec/New_Code/training",
-"model_version": "v1.5",
-"encoder": "timm-efficientnet-l2",
-"encoder_weights": "noisy-student-475",
-"activation": null,
-"batch_size": 8,
-"num_epochs": 100,
-"optimizer_lr": 0.0003,
-"optimizer": "adamw",
-"lr_scheduler_gamma": 0.999,
-"metrics": ["accuracy", "iou_score"],
-"segmentation_classes": 2,
-"class_weights": [1,60],
-"weight_range_multiclass": [50,200],
-"dice": true,
-"focal": false,
-"lambda": 5,
-"sampler": false,
-"grad_clip_value": 10,
-"display_image": false,
-"num_workers": 8,
-"object_detection": false,
-"mixed_precision": true,
-"grid_search": false
+- **Switch between binary and multiclass**:  
+  Change `"segmentation"` and `"segmentation_classes"` in the configs.
+- **Try different models**:  
+  Change `"encoder"` or use `"transformer"` for Swin/ViT.
+- **Tune augmentations**:  
+  Edit `"augmentation_settings"` in the config.
+- **Grid search**:  
+  Enable and configure in `training_config.json`.
+- **F1 Score**:  
+  Choose `"macro"`, `"micro"`, `"weighted"`, or `"none"` via `"f1_average"` in `training_config.json`.
 
 
-### Multiclass
+---
 
-best_model_v1.5_epoch32_encoder_timm-efficientnet-l2_seg_multiclass_lambda5_optadamw_lr0.0003_dice+ce_wr50_200_samplerFalse_iou0.4858_f10.5855.pth
+## Best Models
 
-"device": "cuda",
-"path":  "C:/users/comi/Desktop/Wound_Segmentation_III/Data" ,
-"preprocess_path": "C:/Users/comi/Desktop/Wound_Segmentation_III/IRM_Formaltec/New_Code/training",
-"model_version": "v1.5",
-"encoder": "timm-efficientnet-l2",
-"encoder_weights": "noisy-student-475",
-"activation": null,
-"batch_size": 8,
-"num_epochs": 100,
-"optimizer_lr": 0.0003,
-"optimizer": "adamw",
-"lr_scheduler_gamma": 0.999,
-"metrics": ["accuracy", "iou_score"],
-"segmentation_classes": 11,
-"class_weights": [1,60],
-"weight_range_multiclass": [50,200],
-"dice": true,
-"focal": false,
-"lambda": 5,
-"sampler": false,
-"grad_clip_value": 10,
-"display_image": false,
-"num_workers": 8,
-"object_detection": false,
-"mixed_precision": true,
-"grid_search": false
+| Mode      | Model Filename                                                                 | IoU    | F1     |
+|-----------|-------------------------------------------------------------------------------|--------|--------|
+| Binary    | `best_model_v1.5_epoch21_encoder_timm-efficientnet-l2_seg_binary_lambda5_optadamw_lr0.0003_dice+ce_wr50_200_samplerFalse_iou0.8005_f10.8746.pth` | 0.8005 | 0.8746 |
+| Multiclass| `best_model_v1.5_epoch32_encoder_timm-efficientnet-l2_seg_multiclass_lambda5_optadamw_lr0.0003_dice+ce_wr50_200_samplerFalse_iou0.4858_f10.5855.pth` | 0.4858 | 0.5855 |
+
+---
+
+## Example Results
+
+<img src="images/example_image_1.png" alt="Sample Segmentation" width="600"/>
+<div style="font-size: 1.5em; font-family: 'Arial Black', Arial, sans-serif; margin-bottom: 1em;">
+  Sample input, ground truth, and predicted mask
+</div>
+
+---
+
+## Model Interpretability: Grad-CAM Visualizations
+
+This project integrates **Grad-CAM** (Gradient-weighted Class Activation Mapping) to provide visual explanations for model predictions, helping to understand which regions of an image most influence the model's decisions, making model decisions more transparent and interpretable.
+
+### How Grad-CAM is Used in This Project
+- **Automatic During Training:**
+  - If `"gradCAM": true` is set in  `training_config.json`, Grad-CAM visualizations are automatically generated for a few validation samples every N epochs during training.
+  - The visualizations are saved in the `gradcam_outputs/` directory as image files.
+
+
+### Example Output
+Below is a sample grid of Grad-CAM visualizations. Each row shows:
+- The Grad-CAM heatmap
+- The original image
+- The overlay of heatmap on the image
+
+![Grad-CAM Example](gradcam_outputs/Figure_1.png)
+
+
+### Why Use Grad-CAM?
+- **Debugging:** See if the model is focusing on the correct regions.
+- **Trust:** Build confidence in model predictions for clinical or research use.
+- **Insight:** Identify failure cases or dataset/model biases.
+
+---
+
+## Notes
+
+- All code is modular and easy to extend.
+- Due to privacy, the data used to train the model is not publicly available
+- For questions or contributions, open an issue or pull request!
+---
 

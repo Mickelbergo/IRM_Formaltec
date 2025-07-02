@@ -15,7 +15,21 @@ import ssl
 import numpy as np
 from ultralytics import YOLO
 from kornia.losses import FocalLoss
+from visualize_gradcam import visualize_gradcam
+import torchvision
 ssl._create_default_https_context = ssl._create_unverified_context
+
+# Utility function for config access
+# Use new structured config if available, else fallback to legacy
+
+def get_config(cfg, *keys, legacy_key=None):
+    d = cfg
+    for k in keys:
+        if isinstance(d, dict) and k in d:
+            d = d[k]
+        else:
+            return cfg.get(legacy_key or keys[-1])
+    return d
 
 def rescale_weights(original_weights, weight_range=(50, 200)):
     """
@@ -64,21 +78,21 @@ def main():
     print(f'Initializing Device: {DEVICE}')
 
     # Set paths
-    path = train_config["path"]
-    model_version = train_config["model_version"]
+    path = get_config(train_config, "data", "path", legacy_key="path")
+    model_version = get_config(train_config, "model", "version", legacy_key="model_version")
 
     # Load all image and mask paths
     image_dir = os.path.join(path, "new_images_640_1280")
     mask_dir = os.path.join(path, "new_masks_640_1280")
 
-    valid_extensions = ('.jpg', '.jpeg', '.png', '.bmp', '.tiff')
+    valid_extensions = tuple(get_config(train_config, 'training', 'valid_extensions', legacy_key='valid_extensions'))
     image_ids = sorted([f for f in os.listdir(image_dir) if f.lower().endswith(valid_extensions)])
 
     # Shuffle and split the dataset into training and validation sets
-    random.seed(42)  # For reproducibility
+    random.seed(get_config(train_config, 'training', 'random_seed', legacy_key='random_seed'))  # For reproducibility
     random.shuffle(image_ids)
 
-    split_ratio = 0.8  # 80% training, 20% validation
+    split_ratio = get_config(train_config, 'training', 'split_ratio', legacy_key='split_ratio')
     split_index = int(len(image_ids) * split_ratio)
 
     train_ids = image_ids[:split_index]
@@ -87,8 +101,11 @@ def main():
     #OBJECT DETECTION -> YOLO
     detection_model = YOLO(os.path.join(preprocessing_config["yolo_path"], "attempt_1/weights/best.pt"))
 
-    if train_config["encoder"] != "transformer":
-        preprocessing_fn = get_preprocessing_fn(train_config["encoder"], pretrained= train_config["encoder_weights"])
+    if get_config(train_config, "model", "encoder", legacy_key="encoder") != "transformer":
+        preprocessing_fn = get_preprocessing_fn(
+            get_config(train_config, "model", "encoder", legacy_key="encoder"),
+            pretrained=get_config(train_config, "model", "encoder_weights", legacy_key="encoder_weights")
+        )
     else:
         preprocessing_fn = None    
     # Create dataset instances
@@ -99,7 +116,7 @@ def main():
         augmentation= 'train',
         preprocessing_fn= preprocessing_fn,
         detection_model=detection_model,
-        target_size= tuple(preprocessing_config["target_size"]),
+        target_size= tuple(get_config(preprocessing_config, "target_size")),
         preprocessing_config = preprocessing_config,
         train_config = train_config,
         device = DEVICE,
@@ -122,74 +139,120 @@ def main():
         classes_to_exclude=preprocessing_config["classes_to_exclude"])
     
 
-    train_loader = DataLoader(train_dataset, batch_size=train_config["batch_size"], shuffle=True, num_workers= train_config["num_workers"], worker_init_fn= worker_init_fn, persistent_workers= True)
-    valid_loader = DataLoader(valid_dataset, batch_size=train_config["batch_size"], shuffle=False, num_workers= train_config["num_workers"], worker_init_fn= worker_init_fn, persistent_workers=True)
+    train_loader = DataLoader(train_dataset, batch_size=get_config(train_config, 'training', 'batch_size', legacy_key='batch_size'), shuffle=True, num_workers=get_config(train_config, 'training', 'num_workers', legacy_key='num_workers'), worker_init_fn= worker_init_fn, persistent_workers= True)
+    valid_loader = DataLoader(valid_dataset, batch_size=get_config(train_config, 'training', 'batch_size', legacy_key='batch_size'), shuffle=False, num_workers=get_config(train_config, 'training', 'num_workers', legacy_key='num_workers'), worker_init_fn= worker_init_fn, persistent_workers=True)
 
     # Define model
-    if train_config["encoder"] == "transformer": #using SWIN transformer from huggingface with pretrained weights
-        model = UNetWithSwinTransformer(classes = train_config["segmentation_classes"], activation = train_config["activation"])
+    if get_config(train_config, "model", "encoder", legacy_key="encoder") == "transformer": #using SWIN transformer from huggingface with pretrained weights
+        model = UNetWithSwinTransformer(classes=get_config(train_config, 'model', 'segmentation_classes', legacy_key='segmentation_classes'), activation=train_config["activation"])
     else:
         model = UNetWithClassification(
-            encoder_name=train_config["encoder"],
-            encoder_weights=train_config["encoder_weights"],
-            classes= train_config["segmentation_classes"],  # Segmentation classes (e.g., wound vs. background),  # Replace with the actual number of wound classes
-            activation=None #crossentropy loss expects raw logits
+            encoder_name=get_config(train_config, "model", "encoder", legacy_key="encoder"),
+            encoder_weights=get_config(train_config, "model", "encoder_weights", legacy_key="encoder_weights"),
+            classes=get_config(train_config, 'model', 'segmentation_classes', legacy_key='segmentation_classes'),
+            activation=None 
         )
+
+
     model = model.to(DEVICE)
 
     # Define optimizer, loss, and scheduler
-    optimizer = torch.optim.Adam(model.parameters(), lr=train_config["optimizer_lr"])
-    scheduler = torch.optim.lr_scheduler.ExponentialLR(optimizer, gamma=train_config["lr_scheduler_gamma"])
-    encoder = train_config["encoder"]
+    optimizer = torch.optim.AdamW(model.parameters(), lr=get_config(train_config, 'training', 'learning_rate', legacy_key='optimizer_lr'))
+    scheduler = torch.optim.lr_scheduler.ExponentialLR(optimizer, gamma=get_config(train_config, 'training', 'lr_scheduler_gamma', legacy_key='lr_scheduler_gamma'))
+    encoder = get_config(train_config, "model", "encoder", legacy_key="encoder")
 
     # Define the type of segmentation, the corresponding loss function and the weights
 
-    segmentation = preprocessing_config["segmentation"] #either 'binary' or 'multiclass'
+    segmentation = get_config(preprocessing_config, 'segmentation_mode', legacy_key='segmentation') #either 'binary' or 'multiclass'
     #class_weights_multiclass = torch.load(os.path.join(path, "class_weights.pth"), weights_only= True).float().to(DEVICE)
     #class_weights = torch.tensor(train_config["class_weights"]).to(DEVICE)
 
-    weight_range = (50,200)
+    weight_range = tuple(get_config(train_config, 'training', 'weight_range', legacy_key='weight_range'))
     non_scaled_weights = torch.load(os.path.join(path, "class_weights.pth"), weights_only=True).float().to(DEVICE)
     image_weights_tensor = torch.load(os.path.join(path, "image_weights.pth"), weights_only=True).float().to(DEVICE)
     class_weights_multiclass = rescale_weights(non_scaled_weights, weight_range=weight_range)
-    class_weights_binary = torch.tensor(train_config["class_weights"]).float().to(DEVICE)
+    class_weights_binary = torch.tensor(get_config(train_config, 'model', 'class_weights', legacy_key='class_weights')).float().to(DEVICE)
 
     if segmentation == "binary": 
         CE_Loss = nn.CrossEntropyLoss(weight = class_weights_binary) #use the predefined weights for background vs wound
     else:
         CE_Loss = nn.CrossEntropyLoss(weight = class_weights_multiclass) 
 
-    if train_config["dice"]:
-        DICE_Loss = smp.losses.DiceLoss(mode = "multiclass")
+    if get_config(train_config, 'training', 'loss_functions', legacy_key='dice') == 'dice' or get_config(train_config, 'dice'):
+        DICE_Loss = smp.losses.DiceLoss(mode = get_config(train_config, 'training', 'dice_loss_mode', legacy_key='dice_loss_mode'))
     else: 
         DICE_Loss = None
-    if train_config["focal"]:
-        Focal_loss = FocalLoss(alpha=0.5, gamma=4.0, reduction='mean', weight=class_weights_multiclass)
+    if get_config(train_config, 'training', 'loss_functions', legacy_key='focal') == 'focal' or get_config(train_config, 'focal'):
+        focal_loss_cfg = get_config(train_config, 'training', 'focal_loss', legacy_key='focal_loss')
+        Focal_loss = FocalLoss(
+            alpha=focal_loss_cfg.get('alpha', 0.5),
+            gamma=focal_loss_cfg.get('gamma', 4.0),
+            reduction=focal_loss_cfg.get('reduction', 'mean'),
+            weight=class_weights_multiclass
+        )
     else:
         Focal_loss = None
 
     #Segmentation loss function is either only weighted BCE or weighted BCE + DICE
 
-    if train_config["display_image"]:
+    if get_config(train_config, 'training', 'display_image', legacy_key='display_image'):
         display_image = True
     else: display_image = False
 
     # Define training and validation epochs
     
-    train_epoch = TrainEpoch(model=model, CE_Loss=CE_Loss, DICE_Loss=DICE_Loss, Focal_loss=Focal_loss, segmentation=segmentation, optimizer=optimizer, device=DEVICE, grad_clip_value = train_config["grad_clip_value"], 
-                            display_image = display_image, nr_classes = train_config["segmentation_classes"],scheduler=scheduler)
-    valid_epoch = ValidEpoch(model=model, CE_Loss = CE_Loss, DICE_Loss = DICE_Loss, Focal_loss = Focal_loss, segmentation = segmentation, device=DEVICE, display_image = display_image, nr_classes = train_config["segmentation_classes"], scheduler=scheduler)
+    train_epoch = TrainEpoch(model=model, CE_Loss=CE_Loss, DICE_Loss=DICE_Loss, Focal_loss=Focal_loss, segmentation=segmentation, optimizer=optimizer, device=DEVICE, grad_clip_value = get_config(train_config, 'training', 'grad_clip_value', legacy_key='grad_clip_value'), 
+                            display_image = display_image, nr_classes = get_config(train_config, 'model', 'segmentation_classes', legacy_key='segmentation_classes'),scheduler=scheduler)
+    valid_epoch = ValidEpoch(model=model, CE_Loss = CE_Loss, DICE_Loss = DICE_Loss, Focal_loss = Focal_loss, segmentation = segmentation, device=DEVICE, display_image = display_image, nr_classes = get_config(train_config, 'model', 'segmentation_classes', legacy_key='segmentation_classes'), scheduler=scheduler)
 
     # Training loop
     max_score = 0
-    for epoch in range(train_config["num_epochs"]):
-        print(f"Epoch {epoch + 1}/{train_config['num_epochs']}")
+    for epoch in range(get_config(train_config, 'training', 'num_epochs', legacy_key='num_epochs')):
+        print(f"Epoch {epoch + 1}/{get_config(train_config, 'training', 'num_epochs', legacy_key='num_epochs')}")
         
         # Train model
         train_logs = train_epoch.run(train_loader)
         
         # Validate model
         valid_logs = valid_epoch.run(valid_loader)
+        
+        # Grad-CAM visualization (every 5 epochs, if enabled)
+        if get_config(train_config, 'training', 'gradCAM', legacy_key='gradCAM') and (epoch % 1 == 0):
+            os.makedirs('gradcam_outputs', exist_ok=True)
+            # Save current model weights
+            temp_model_path = 'gradcam_outputs/temp_model.pth'
+            torch.save(model.state_dict(), temp_model_path)
+            # Create a new model instance and load weights
+            if isinstance(model, UNetWithClassification):
+                gradcam_model = UNetWithClassification(
+                    encoder_name=get_config(train_config, "model", "encoder", legacy_key="encoder"),
+                    encoder_weights=get_config(train_config, "model", "encoder_weights", legacy_key="encoder_weights"),
+                    classes=get_config(train_config, 'model', 'segmentation_classes', legacy_key='segmentation_classes'),
+                    activation=None
+                )
+                target_layer = "segmentation_model.decoder.seg_blocks.3.block.0.block.2"
+            elif isinstance(model, UNetWithSwinTransformer):
+                gradcam_model = UNetWithSwinTransformer(
+                    classes=get_config(train_config, 'model', 'segmentation_classes', legacy_key='segmentation_classes'),
+                    activation=train_config["activation"]
+                )
+                target_layer = "up4.0"
+            else:
+                gradcam_model = None
+                target_layer = None
+            if gradcam_model is not None:
+                gradcam_model.load_state_dict(torch.load(temp_model_path, map_location=DEVICE))
+                gradcam_model = gradcam_model.to(DEVICE)
+                gradcam_model.eval()
+                # Get a batch from the validation loader
+                val_batch = next(iter(valid_loader))
+                images = val_batch['image'] if isinstance(val_batch, dict) else val_batch[0]
+                for idx in range(min(2, images.shape[0])):
+                    input_tensor = images[idx:idx+1].to(DEVICE)
+                    target_class = 1
+                    save_path = f'gradcam_outputs/epoch{epoch+1}_sample{idx+1}.png'
+                    visualize_gradcam(gradcam_model, input_tensor, target_class, target_layer, save_path=save_path, show=False)
+                    print(f"Saved Grad-CAM visualization: {save_path}")
         
         # Save best model
         if valid_logs['iou_score'] > max_score:
@@ -206,7 +269,8 @@ def main():
         print(f"Train IoU: {train_logs['iou_score']:.4f}, Valid IoU: {valid_logs['iou_score']:.4f}")
 
     # Save the final model
-    torch.save(model, os.path.join(path, f"final_model_{model_version}_{150}_{encoder}.pth"))
+    final_model_epoch = get_config(train_config, 'training', 'final_model_epoch', legacy_key='final_model_epoch')
+    torch.save(model, os.path.join(path, f"final_model_{model_version}_{final_model_epoch}_{encoder}.pth"))
     print("Final model saved!")
 
 if __name__ == "__main__":

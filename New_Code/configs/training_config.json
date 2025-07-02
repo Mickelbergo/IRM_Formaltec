@@ -1,28 +1,46 @@
 {
-    "device": "cuda",
-    "path":  "E:/projects/Wound_Segmentation_III/Data" ,
-    "preprocess_path": "E:/projects/Wound_Segmentation_III/IRM_Formaltec/New_Code/training",
-    "model_version": "v1.5",
-    "encoder": "timm-efficientnet-l2",
-    "encoder_weights": "noisy-student-475",
-    "activation": null,
-    "batch_size": 8,
-    "num_epochs": 100,
-    "optimizer_lr": 0.0003,
-    "optimizer": "adamw",
-    "lr_scheduler_gamma": 0.999,
-    "metrics": ["accuracy", "iou_score"],
-    "segmentation_classes": 11,
-    "class_weights": [1,60],
-    "weight_range_multiclass": [50,200],
-    "dice": true,
-    "focal": false,
-    "lambda": 5,
-    "sampler": false,
-    "grad_clip_value": 10,
-    "display_image": false,
-    "num_workers": 1,
-    "object_detection": false,
-    "mixed_precision": true,
-    "grid_search": false
+    "data": {
+        "path":  "E:/projects/Wound_Segmentation_III/Data" ,
+        "preprocess_path": "E:/projects/Wound_Segmentation_III/IRM_Formaltec/New_Code/training"
+    
+    },
+    "model": {
+        "version": "v1.5",
+        "encoder": "timm-efficientnet-l2",
+        "encoder_weights": "noisy-student-475",
+        "activation": null,
+        "segmentation_classes": 11,
+        "class_weights": [1, 60]
+    },
+    "training": {
+        "batch_size": 8,
+        "num_epochs": 100,
+        "learning_rate": 0.0003,
+        "optimizer": "adamw",
+        "lr_scheduler_gamma": 0.999,
+        "metrics": ["accuracy", "iou_score"],
+        "weight_range_multiclass": [50, 200],
+        "loss_functions": ["dice"],
+        "lambda_loss": 5,
+        "sampler": false,
+        "grad_clip_value": 10,
+        "display_image": false,
+        "num_workers": 6,
+        "use_focal_loss": true, 
+        "mixed_precision": true,
+        "grid_search": false,
+        "random_seed": 42,
+        "split_ratio": 0.8,
+        "weight_range": [50, 200],
+        "focal_loss": {
+            "alpha": 0.5,
+            "gamma": 4.0,
+            "reduction": "mean"
+        },
+        "dice_loss_mode": "multiclass",
+        "valid_extensions": [".jpg", ".jpeg", ".png", ".bmp", ".tiff"],
+        "final_model_epoch": 150,
+        "f1_average": "macro",
+        "gradCAM": true
+    }
 }

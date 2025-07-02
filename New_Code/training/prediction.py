@@ -34,6 +34,16 @@ os.makedirs(output_dir, exist_ok=True)
 # Map 'Model' to 'model' in sys.modules if the module was named 'Model' during saving
 sys.modules['Model'] = model  # Optional: Only if needed to resolve module name discrepancies
 
+# Example for accessing config values with fallback
+# Use new structured config if available, else fallback to legacy
+def get_config(cfg, *keys, legacy_key=None):
+    d = cfg
+    for k in keys:
+        if isinstance(d, dict) and k in d:
+            d = d[k]
+        else:
+            return cfg.get(legacy_key or keys[-1])
+    return d
 
 if train_config["encoder"] == "transformer": #using SWIN transformer from huggingface with pretrained weights
     model = UNetWithSwinTransformer(classes = train_config["segmentation_classes"], activation = train_config["activation"])
@@ -113,7 +123,7 @@ for img_name in image_files:
         print(f"Raw model output shape: {segmentation_output.shape}")
 
         # Apply activation function from config
-        activation = train_config.get("activation")
+        activation = get_config(train_config, "activation")
         if activation == "softmax":
             segmentation_output = torch.softmax(segmentation_output, dim=1)
         elif activation == "sigmoid":
