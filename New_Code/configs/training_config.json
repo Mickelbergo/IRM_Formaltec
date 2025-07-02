@@ -12,7 +12,7 @@
     "optimizer": "adamw",
     "lr_scheduler_gamma": 0.999,
     "metrics": ["accuracy", "iou_score"],
-    "segmentation_classes": 2,
+    "segmentation_classes": 11,
     "class_weights": [1,60],
     "weight_range_multiclass": [50,200],
     "dice": true,
