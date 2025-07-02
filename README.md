@@ -147,7 +147,7 @@ Below is a sample grid of Grad-CAM visualizations. Each row shows:
 - The original image
 - The overlay of heatmap on the image
 
-![Grad-CAM Example](gradcam_outputs/Figure_1.png)
+![Grad-CAM Example](images/Figure_1.png)
 
 
 ### Why Use Grad-CAM?
