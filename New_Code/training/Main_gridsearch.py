@@ -249,7 +249,7 @@ def train_once(train_config, preprocessing_config, train_ids, valid_ids, path, p
             else:
                 gradcam_model = UNetWithClassification(
                     encoder_name=get_config(train_config, "model", "encoder", legacy_key="encoder"),
-                    encoder_weights=get_config(train_config, "model"s, "encoder_weights", legacy_key="encoder_weights"),
+                    encoder_weights=get_config(train_config, "model", "encoder_weights", legacy_key="encoder_weights"),
                     classes=get_config(train_config, "model", "segmentation_classes", legacy_key="segmentation_classes"),
                     activation= None
                 )

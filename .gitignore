@@ -2,7 +2,6 @@
 /gradcam_outputs/
 
 # Ignore images
-/images/
 
 # Ignore legacy code
 New_Code/Legacy/
