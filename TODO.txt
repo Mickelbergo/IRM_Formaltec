@@ -1,9 +1,0 @@
--The current best models are saved on the good training pc
--The next thing to do is to implement a transformer model further (in the preprocessing and model files)
--Also, currently only 5 classes are classified, extend this to at least the 7 most relevant ones
--Main gridsearch is the main file, essentially we could get rid of main.py (but not sure whether all functionalities are already implemenetd in main_gridsearch)
--We could look at new forms to counter the class imbalance, i.e. artificially creating new data (GANs, VAEs etc.)
--extend grad-cam
--implement Diffusion models
-
--check if gradcam still works when using a different encoder or differnt weights (probably will not work)
