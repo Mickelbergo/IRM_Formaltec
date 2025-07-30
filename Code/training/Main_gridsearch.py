@@ -321,10 +321,10 @@ def main():
 
     # Hyperparameter sets for grid search
     lambdaa_values = [1.0, 3, 5,10]
-    sampler_options = [False]
+    sampler_options = [True, False]
     weight_ranges = [(50, 200), (70, 120), (40,250)]
     loss_combinations = ['focal+ce', 'dice+ce']
-    learning_rates = [1e-4, 5e-4, 1e-3, 3e-4]
+    learning_rates = [1e-4, 5e-4, 1e-3, 3e-4, 5e-4]
     optimizers = ['adamw', 'sgd']
 
     if get_config(train_config, "training", "grid_search", legacy_key="grid_search"):
@@ -374,3 +374,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+ 

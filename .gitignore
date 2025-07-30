@@ -26,3 +26,9 @@ __pycache__/
 **/TODO.txt
 readme_old.txt
 TODO.txt
+
+#ignore diffusion_model
+/diffusion_model/
+
+#ignore diffusion generated images
+/generated_samples_diffusion/
