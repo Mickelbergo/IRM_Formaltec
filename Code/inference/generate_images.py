@@ -11,13 +11,13 @@ import glob
 
 # Same transforms as in training
 mask_preprocess = transforms.Compose([
-    transforms.Resize((128, 128)),
+    transforms.Resize((256, 256)),
     transforms.ToTensor()  # keep 0-1 mask
 ])
 
 def generate_images(model_dir="diffusion_model",
                     masks_dir="../Data/new_masks_640_1280",
-                    num_inference_steps=1000,
+                    num_inference_steps=10000,
                     seed=42,
                     output_dir="generated_samples"):
     """
@@ -29,13 +29,15 @@ def generate_images(model_dir="diffusion_model",
     # Load pipeline from saved model directory
     print(f"Loading model from: {model_dir}")
     pipeline = MaskConditionalDDPMPipeline.from_pretrained(model_dir)
-    pipeline.scheduler = DDPMScheduler(num_train_timesteps=1000)
 
     # Move to GPU if available
     device = "cuda" if torch.cuda.is_available() else "cpu"
     pipeline = pipeline.to(device)
 
-    # Random seed for reproducibility
+    pipeline.scheduler.set_timesteps(num_inference_steps, device=device)
+
+
+
     generator = torch.Generator(device=device).manual_seed(seed)
 
     # Load masks
@@ -69,7 +71,7 @@ if __name__ == "__main__":
     generate_images(
         model_dir="diffusion_model",    # trained model folder
         masks_dir="../Data/new_masks_640_1280",    # directory of masks to condition on
-        num_inference_steps=1000,                  # quality (more steps = better)
+        num_inference_steps=10000,                  # quality (more steps = better)
         seed=0,                                    # reproducibility (can vary)
         output_dir="generated_samples"          
     )
