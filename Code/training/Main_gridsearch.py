@@ -19,12 +19,13 @@ from itertools import product
 from visualize_gradcam import visualize_gradcam
 from collections import Counter
 from PIL import Image
+import warnings
+import time
 
 ssl._create_default_https_context = ssl._create_unverified_context
 
 # Utility function for config access
 # Use new structured config if available, else fallback to legacy
-
 def get_config(cfg, *keys, legacy_key=None):
     d = cfg
     for k in keys:
@@ -81,7 +82,7 @@ def get_most_frequent_foreground_class(mask_path):
     return int(most_common)
 
 def train_once(train_config, preprocessing_config, train_ids, valid_ids, path, preprocessing_fn, detection_model, DEVICE,
-               lambdaa, sampler_option, weight_range, loss_combination, lr, optimizer_choice, grid_search=False):
+               lambdaa, sampler_option, weight_range, loss_combination, lr, optimizer_choice, grid_search=False, originals_fnames=None):
     """
     Train the model once with the provided hyperparameters.
     We always save each new best model (based on IoU), including IoU and F1 in the filename along with all other parameters.
@@ -119,15 +120,32 @@ def train_once(train_config, preprocessing_config, train_ids, valid_ids, path, p
         classes_to_exclude=preprocessing_config["classes_to_exclude"]
     )
 
+    # Warn if any _gen mask is missing
+    for entry in train_ids:
+        fname = entry[1] if isinstance(entry, (list, tuple)) else entry
+        if isinstance(fname, tuple):  # defensive
+            fname = fname[1]
+        if isinstance(entry, (list, tuple)) and len(entry) == 3:
+            # we already have explicit mask name, skip check here
+            continue
+        if isinstance(fname, str) and (fname.endswith("_gen.png") or fname.endswith("_gen.jpg")):
+            mask_name = fname.replace("_gen.png", ".png").replace("_gen.jpg", ".jpg")
+            mask_path = os.path.join(path, "new_masks_640_1280", mask_name)
+            if not os.path.exists(mask_path):
+                warnings.warn(f"[Dataset] No mask found for generated image {fname}", RuntimeWarning)
+
     # Define model
     if get_config(train_config, "model", "encoder", legacy_key="encoder") == "transformer":
-        model = UNetWithSwinTransformer(classes=get_config(train_config, "model", "segmentation_classes", legacy_key="segmentation_classes"), activation=get_config(train_config, "model", "activation", legacy_key="activation"))
+        model = UNetWithSwinTransformer(
+            classes=get_config(train_config, "model", "segmentation_classes", legacy_key="segmentation_classes"),
+            activation=get_config(train_config, "model", "activation", legacy_key="activation")
+        )
     else:
         model = UNetWithClassification(
             encoder_name=get_config(train_config, "model", "encoder", legacy_key="encoder"),
             encoder_weights=get_config(train_config, "model", "encoder_weights", legacy_key="encoder_weights"),
             classes=get_config(train_config, "model", "segmentation_classes", legacy_key="segmentation_classes"),
-            activation=None #crossentropy loss expects raw logits
+            activation=None
         )
     model = model.to(DEVICE)
 
@@ -139,8 +157,11 @@ def train_once(train_config, preprocessing_config, train_ids, valid_ids, path, p
     else:
         raise ValueError("Supported optimizers: 'adamw', 'sgd' ")
     
-
-    scheduler = torch.optim.lr_scheduler.ExponentialLR(optimizer, gamma=get_config(train_config, "training", "lr_scheduler_gamma", legacy_key="lr_scheduler_gamma"))
+    scheduler = torch.optim.lr_scheduler.ExponentialLR(
+        optimizer,
+        gamma=get_config(train_config, "training", "non_grid_search", "lr_scheduler_gamma", legacy_key="lr_scheduler_gamma")
+        if not grid_search else get_config(train_config, "training", "lr_scheduler_gamma", legacy_key="lr_scheduler_gamma")
+    )
     encoder = get_config(train_config, "model", "encoder", legacy_key="encoder")
     segmentation = preprocessing_config["segmentation"]
 
@@ -151,7 +172,7 @@ def train_once(train_config, preprocessing_config, train_ids, valid_ids, path, p
     class_weights_multiclass = rescale_weights(non_scaled_weights, weight_range=weight_range)
     class_weights_binary = torch.tensor(get_config(train_config, "model", "class_weights", legacy_key="class_weights")).float().to(DEVICE)
 
-    # Determine loss combination
+    # Determine loss combination (keep your two presets)
     if loss_combination == 'focal+ce':
         focal_loss_flag = True
         dice_loss_flag = False
@@ -167,19 +188,54 @@ def train_once(train_config, preprocessing_config, train_ids, valid_ids, path, p
         CE_Loss = nn.CrossEntropyLoss(weight=class_weights_multiclass) 
 
     DICE_Loss = smp.losses.DiceLoss(mode="multiclass") if dice_loss_flag else None
-    Focal_loss = FocalLoss(alpha=0.5, gamma=4.0, reduction='mean', weight=class_weights_multiclass) if focal_loss_flag else None
+
+    focal_cfg = get_config(train_config, "training", "focal_loss") or {}
+    focal_alpha = focal_cfg.get("alpha", 0.5)
+    focal_gamma = focal_cfg.get("gamma", 4.0)
+    focal_reduction = focal_cfg.get("reduction", "mean")
+    Focal_loss = FocalLoss(alpha=focal_alpha, gamma=focal_gamma, reduction=focal_reduction, weight=class_weights_multiclass) if focal_loss_flag else None
 
     # Handling sampler
+    def entry_to_orig_filename(entry):
+        name = entry[1] if isinstance(entry, (list, tuple)) else entry
+        base, ext = os.path.splitext(name)
+        if base.endswith("_gen"):
+            base = base[:-4]
+        return base + ext
+    
+    #Handling grad-cam
+    def _entry_to_mask_filename(entry):
+        # Accepts: str | (folder, image) | (folder, image, mask)
+        import os
+        if isinstance(entry, (list, tuple)):
+            if len(entry) == 3:
+                # We stored the original mask name explicitly for generated samples
+                return entry[2]
+            elif len(entry) == 2:
+                name = entry[1]
+            else:
+                name = str(entry)
+        else:
+            name = entry
+        base, _ext = os.path.splitext(name)
+        if base.endswith("_gen"):
+            base = base[:-4]
+        return base + ".png"
+
+    assert originals_fnames is not None, "originals_fnames must be provided"
+    assert len(image_weights_tensor) == len(originals_fnames), "Mismatch between image weights and original images"
+    image_id_to_weight = {fname: w.item() for fname, w in zip(originals_fnames, image_weights_tensor)}
+
     image_ids_total = train_ids + valid_ids
+
     if sampler_option:
-        assert len(image_weights_tensor) == len(image_ids_total), "Mismatch between image weights and dataset size!"
-        image_id_to_weight = dict(zip(image_ids_total, image_weights_tensor))
 
         if(preprocessing_config["exclude_images_with_classes"]): #if we excluded some image ids, we have to take this into account for the sampler
             train_ids = train_dataset.image_ids
 
-        train_weights = torch.tensor([image_id_to_weight[img_id] for img_id in train_ids]).to(DEVICE)
-        sampler = WeightedRandomSampler(weights=train_weights.tolist(), num_samples=len(train_weights), replacement=True)
+        default_w = float(torch.mean(image_weights_tensor).item())
+        train_weights = [image_id_to_weight.get(entry_to_orig_filename(e), default_w) for e in train_ids]
+        sampler = WeightedRandomSampler(weights=train_weights, num_samples=len(train_weights), replacement=True)
     else:
         sampler = None
 
@@ -227,7 +283,8 @@ def train_once(train_config, preprocessing_config, train_ids, valid_ids, path, p
                               f"encoder_{encoder}_seg_{segmentation}_lambda{lambdaa}_opt{optimizer_choice}_lr{lr}_"
                               f"{loss_combination}_wr{wr_str}_sampler{sampler_option}_"
                               f"iou{current_iou:.4f}_f1{current_f1:.4f}.pth")
-            torch.save(best_model_state, os.path.join(path, model_filename))
+            os.makedirs(f'{path}/models', exist_ok=True)
+            torch.save(best_model_state, os.path.join(f'{path}/models', model_filename))
             print(f"Best model saved as {model_filename}!")
 
         # Print metrics
@@ -265,15 +322,17 @@ def train_once(train_config, preprocessing_config, train_ids, valid_ids, path, p
             mask_dir = os.path.join(path, "new_masks_640_1280")
             for idx in range(min(2, images.shape[0])):
                 input_tensor = images[idx:idx+1].to(DEVICE)
-                img_name = image_ids_batch[idx] if idx < len(image_ids_batch) else None
-                if img_name is not None:
-                    mask_path = os.path.join(mask_dir, img_name)
+                entry = image_ids_batch[idx] if idx < len(image_ids_batch) else None
+                if entry is not None:
+                    mask_name = _entry_to_mask_filename(entry)
+                    mask_path = os.path.join(mask_dir, mask_name)
                     if os.path.exists(mask_path):
                         target_class = get_most_frequent_foreground_class(mask_path)
                     else:
                         target_class = 0
                 else:
                     target_class = 0
+
                 save_path = f'gradcam_outputs/gridsearch_epoch{epoch+1}_sample{idx+1}.png'
                 visualize_gradcam(gradcam_model, input_tensor, target_class, target_layer, save_path=save_path, show=False)
                 print(f"Saved Grad-CAM visualization: {save_path} (target_class={target_class})")
@@ -282,16 +341,45 @@ def train_once(train_config, preprocessing_config, train_ids, valid_ids, path, p
 
 def main():
     # Load configurations
-    with open('New_Code/configs/training_config.json') as f:
+    with open('Code/configs/training_config.json') as f:
         train_config = json.load(f)
 
-    with open('New_Code/configs/preprocessing_config.json') as f:
+    with open('Code/configs/preprocessing_config.json') as f:
         preprocessing_config = json.load(f)
 
     # Device configuration
     DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
     print(f'Initializing Device: {DEVICE}')
 
+    # Pretty print of all relevant parameters (using new structure)
+    print("\n==== Training Setup ====")
+    print(f"Batch size: {get_config(train_config, 'training', 'batch_size')}")
+    print(f"Num epochs: {get_config(train_config, 'training', 'num_epochs')}")
+    print(f"Segmentation: {preprocessing_config.get('segmentation')}")
+    print(f"Encoder: {get_config(train_config, 'model', 'encoder')}")
+    print(f"Encoder weights: {get_config(train_config, 'model', 'encoder_weights')}")
+    print(f"Display image: {get_config(train_config, 'training', 'display_image')}")
+    print(f"Num workers: {get_config(train_config, 'training', 'num_workers')}")
+    print(f"Mixed precision: {get_config(train_config, 'training', 'mixed_precision')}")
+    print(f"Use diffusion images: {get_config(train_config, 'training', 'use_diffusion_images')}")
+    print(f"GradCAM: {get_config(train_config, 'training', 'gradCAM')}")
+    print(f"Metrics: {get_config(train_config, 'training', 'metrics')}")
+    print(f"Sampler: {get_config(train_config, 'training', 'sampler')}")
+
+    time.sleep(2)
+    print("\n-- Training --")
+
+    print(f"Split ratio: {get_config(train_config, 'training', 'split_ratio')}")
+    print(f"Grad clip value: {get_config(train_config, 'training', 'grad_clip_value')}")
+    print("\n-- Grid-search enabled --")
+    print(get_config(train_config, 'training', 'grid_search_enabled'))
+    print("\n-- Non-grid-search cfg --")
+    print(get_config(train_config, 'training', 'non_grid_search'))
+    print("\n-- Grid-search parameters --")
+    print(get_config(train_config, 'training', 'grid_search_parameters'))
+    print("==== ============== ====\n")
+
+    time.sleep(2)
     # Set paths
     path = get_config(train_config, "data", "path", legacy_key="path")
     model_version = get_config(train_config, "model", "version", legacy_key="model_version")
@@ -308,8 +396,22 @@ def main():
     split_ratio = get_config(train_config, "training", "split_ratio", legacy_key="split_ratio")
     split_index = int(len(image_ids) * split_ratio)
 
-    train_ids = image_ids[:split_index]
-    valid_ids = image_ids[split_index:]
+    train_ids = [(image_dir, f) for f in image_ids[:split_index]]
+    valid_ids = [(image_dir, f) for f in image_ids[split_index:]]
+
+    originals_fnames = [f for _, f in train_ids + valid_ids]
+
+    if get_config(train_config, "training", "use_diffusion_images"):
+        gen_image_dir = os.path.join(path, "generated_samples")
+        if os.path.isdir(gen_image_dir):
+            gen_images = []
+            for f in sorted(os.listdir(gen_image_dir)):
+                if f.lower().endswith(valid_extensions):
+                    # strip "_gen" so the mask path matches original mask file
+                    mask_name = f.replace("_gen.png", ".png").replace("_gen.jpg", ".jpg")
+                    gen_images.append((gen_image_dir, f, mask_name))
+            # add only to TRAIN
+            train_ids.extend(gen_images)
 
     # OBJECT DETECTION -> YOLO
     detection_model = YOLO(os.path.join(preprocessing_config["yolo_path"], "attempt_1/weights/best.pt"))
@@ -319,27 +421,45 @@ def main():
     else:
         preprocessing_fn = None
 
-    # Hyperparameter sets for grid search
-    lambdaa_values = [1.0, 3, 5,10]
-    sampler_options = [True, False]
-    weight_ranges = [(50, 200), (70, 120), (40,250)]
-    loss_combinations = ['focal+ce', 'dice+ce']
-    learning_rates = [1e-4, 5e-4, 1e-3, 3e-4, 5e-4]
-    optimizers = ['adamw', 'sgd']
+    # Hyperparameter sets (from config)
+    grid_enabled = bool(get_config(train_config, "training", "grid_search_enabled"))
+    gs_params = get_config(train_config, "training", "grid_search_parameters") or {}
+    ngs = get_config(train_config, "training", "non_grid_search") or {}
 
-    if get_config(train_config, "training", "grid_search", legacy_key="grid_search"):
+    if grid_enabled:
+        # derive search spaces; provide sane fallbacks
+        learning_rates = gs_params.get("learning_rate", [1e-4, 3e-4, 1e-3])
+        optimizers = gs_params.get("optimizer", ["adamw", "sgd"])
+        gammas = gs_params.get("lr_scheduler_gamma", [0.99, 0.999, 0.9999])
+        use_focal_list = gs_params.get("use_focal_loss", [True, False])
+        loss_functions = gs_params.get("loss_functions", ["dice", "focal_loss"])
+        lambda_list = gs_params.get("lambda_loss", [1, 5, 10])
+
+        # We keep your two-mode "loss_combination" mapping for Trainer:
+        # - if 'dice' in loss_functions AND use_focal_loss False => "dice+ce"
+        # - if use_focal_loss True => "focal+ce"
         global_best_iou = 0.0
         global_best_f1 = 0.0
         global_best_model_state = None
 
-        for (lambdaa, sampler_option, weight_range, loss_combination, lr, optimizer_choice) in product(
-            lambdaa_values, sampler_options, weight_ranges, loss_combinations, learning_rates, optimizers
+        for (lr, optimizer_choice, gamma, use_focal, lf, lambdaa) in product(
+            learning_rates, optimizers, gammas, use_focal_list, loss_functions, lambda_list
         ):
+            # choose loss combination
+            loss_combo = "focal+ce" if use_focal else "dice+ce"
+
+            # choose weight range from non_grid_search or default
+            weight_range = tuple(ngs.get("weight_range_multiclass", [50, 200]))
+
+            # scheduler gamma override (we pass in train_once via train_config read, but we set gamma here for print)
+            # The actual scheduler reads gamma from train_config; to reflect search gamma, we temporarily inject:
+            train_config["training"]["lr_scheduler_gamma"] = gamma
+
+            print(f"[Grid] lr={lr}, opt={optimizer_choice}, gamma={gamma}, use_focal={use_focal}, lf={lf}, lambda={lambdaa}, weight_range={weight_range}")
             best_iou, best_f1, final_model_state = train_once(
                 train_config, preprocessing_config, train_ids, valid_ids, path, preprocessing_fn, detection_model, DEVICE,
-                lambdaa, sampler_option, weight_range, loss_combination, lr, optimizer_choice, grid_search=True
+                lambdaa, get_config(train_config, "training", "sampler"), weight_range, loss_combo, lr, optimizer_choice, grid_search=True, originals_fnames=originals_fnames
             )
-            # Track the global best model based on IoU
             if best_iou > global_best_iou and final_model_state is not None:
                 global_best_iou = best_iou
                 global_best_f1 = best_f1
@@ -354,16 +474,23 @@ def main():
             print("No improvements found during grid search.")
 
     else:
-        # Run a single training session with the original hyperparameters
-        lambdaa = get_config(train_config, "training", "lambda_loss", legacy_key="lambda")
+        # Non-grid single run
+        lambdaa = ngs.get("lambda_loss", 5)
         sampler_option = get_config(train_config, "training", "sampler", legacy_key="sampler")
-        weight_range = get_config(train_config, "training", "weight_range_multiclass", legacy_key="weight_range_multiclass")
-        loss_combination = 'focal+ce' if get_config(train_config, "training", "use_focal_loss", legacy_key="focal") else 'dice+ce'
-        lr = get_config(train_config, "training", "learning_rate", legacy_key="optimizer_lr")
-        optimizer_choice = get_config(train_config, "training", "optimizer", legacy_key="optimizer")
+        weight_range = tuple(ngs.get("weight_range_multiclass", [50, 200]))
+        use_focal_loss = bool(ngs.get("use_focal_loss", True))
+        lr = ngs.get("learning_rate", 3e-4)
+        optimizer_choice = ngs.get("optimizer", "adamw")
+        # keep your two-mode combination
+        loss_combination = 'focal+ce' if use_focal_loss else 'dice+ce'
+
+        # Ensure scheduler gamma is present for the non-grid path
+        train_config["training"]["lr_scheduler_gamma"] = ngs.get("lr_scheduler_gamma", 0.999)
+
+        print(f"[Run] lr={lr}, opt={optimizer_choice}, gamma={train_config['training']['lr_scheduler_gamma']}, use_focal={use_focal_loss}, lambda={lambdaa}, weight_range={weight_range}, loss_combo={loss_combination}")
         best_iou, best_f1, best_model_state = train_once(
             train_config, preprocessing_config, train_ids, valid_ids, path, preprocessing_fn, detection_model, DEVICE,
-            lambdaa, sampler_option, weight_range, loss_combination, lr, optimizer_choice, grid_search=False
+            lambdaa, sampler_option, weight_range, loss_combination, lr, optimizer_choice, grid_search=False, originals_fnames=originals_fnames
         )
 
         # After single run training completes, we could also save a final model if needed:
@@ -374,4 +501,3 @@ def main():
 
 if __name__ == "__main__":
     main()
- 

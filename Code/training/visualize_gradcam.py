@@ -13,7 +13,7 @@ from model import UNetWithClassification, UNetWithSwinTransformer
 
 
 
-with open('New_Code/configs/training_config.json') as f:
+with open('Code/configs/training_config.json') as f:
     train_config = json.load(f)
 
 
@@ -38,7 +38,7 @@ def load_image(image_path, target_size=(384, 384)):
     return transform(img)  # Returns a tensor
 
 # Function to visualize Grad-CAM
-def visualize_gradcam(model, input_tensor, target_class, target_layer, save_path=None, show=True, config_path='New_Code/configs/preprocessing_config.json'):
+def visualize_gradcam(model, input_tensor, target_class, target_layer, save_path=None, show=True, config_path='Code/configs/preprocessing_config.json'):
     model.eval()
     input_tensor = input_tensor.to(next(model.parameters()).device)
     input_tensor.requires_grad_()

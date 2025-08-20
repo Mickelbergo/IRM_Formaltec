@@ -14,11 +14,11 @@
         "elastic_transform": {"enabled": true, "p": 0.5},
         "optical_distortion": {"enabled": true, "p": 0.5},
         "grid_distortion": {"enabled": true, "p": 0.5},
-        "coarse_dropout": {"enabled": true, "max_holes": 8, "max_height": 32, "max_width": 32, "p": 0.3},
+        "coarse_dropout": {"enabled": true, "num_holes_range": [1,8], "hole_height_range": [1, 32], "hole_width_range": [1, 32],"p": 0.3},
         "gaussian_blur": {"enabled": true, "blur_limit": [3, 7], "p": 0.2}
     },
     "target_size": [384, 384],
-    "segmentation": "multiclass",
+    "segmentation": "binary",
     "yolo_path": "E:/projects/Wound_Segmentation_III/Data/YOLO",
     "exclude_images_with_classes": true,
     "classes_to_exclude": [3, 5, 7, 9, 10],

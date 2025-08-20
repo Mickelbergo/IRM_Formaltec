@@ -7,7 +7,7 @@ import random
 import shutil
 
 if __name__ == "__main__":
-    with open('New_Code/configs/preprocessing_config.json') as f:
+    with open('Code/configs/preprocessing_config.json') as f:
         preprocessing_config = json.load(f)
 
     yolo_path = preprocessing_config["yolo_path"]

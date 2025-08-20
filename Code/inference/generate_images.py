@@ -73,5 +73,5 @@ if __name__ == "__main__":
         masks_dir="../Data/new_masks_640_1280",    # directory of masks to condition on
         num_inference_steps=10000,                  # quality (more steps = better)
         seed=0,                                    # reproducibility (can vary)
-        output_dir="generated_samples"          
+        output_dir="../Data/generated_samples"          
     )

@@ -120,7 +120,7 @@ def evaluate(config, epoch, pipeline, eval_masks):
     test_dir = os.path.join(config.output_dir, "samples")
     os.makedirs(test_dir, exist_ok=True)
     image_grid.save(f"{test_dir}/{epoch:04d}.png")
-
+    
 # ===============================
 # === Train =====================
 # ===============================

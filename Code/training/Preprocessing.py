@@ -12,6 +12,7 @@ import matplotlib.pyplot as plt
 from PIL import Image
 from transformers import AutoImageProcessor
 from tqdm import tqdm
+import warnings
 
 class Dataset(BaseDataset):
     def __init__(self, 
@@ -45,6 +46,40 @@ class Dataset(BaseDataset):
         if(self.exclude_images_with_classes and self.preprocessing_config["segmentation"] == "multiclass"):
             self.filter_images()
 
+    def _resolve_paths_from_entry(self, entry):
+        """
+        Accepts:
+        - str:                  "image.png"
+        - (folder, image):      (".../images", "image.png")
+        - (folder, image, mask) (".../images", "image_gen.png", "image.png")  # mask stripped of _gen already
+        Returns (image_path, mask_path).
+        For 2-tuple or str, the mask is derived by stripping '_gen' (if present) and forcing .png.
+        """
+        if isinstance(entry, (list, tuple)):
+            if len(entry) == 3:
+                img_folder, img_name, mask_name = entry
+            elif len(entry) == 2:
+                img_folder, img_name = entry
+                base, _ext = os.path.splitext(os.path.basename(img_name))
+                if base.endswith("_gen"):
+                    base = base[:-4]
+                mask_name = base + ".png"
+            else:
+                raise TypeError(f"Unsupported entry tuple length {len(entry)} for: {entry}")
+        else:
+            img_folder = os.path.join(self.dir_path, "new_images_640_1280")
+            img_name = entry
+            base, _ext = os.path.splitext(os.path.basename(entry))
+            # originals don’t have _gen, but this is safe either way
+            if base.endswith("_gen"):
+                base = base[:-4]
+            mask_name = base + ".png"
+
+        image_path = os.path.join(img_folder, img_name)
+        mask_path = os.path.join(self.dir_path, "new_masks_640_1280", mask_name)
+        return image_path, mask_path
+
+
     def filter_images(self):
         """
         Filters out images that contain any of the classes specified in classes_to_exclude.
@@ -55,13 +90,13 @@ class Dataset(BaseDataset):
         excluded_images = []
         print("Filtering images containing classes:", self.classes_to_exclude)
         for idx in tqdm(range(len(self.image_ids)), desc="Filtering images"):
-            image_id = self.image_ids[idx]
-            mask_id = self.mask_ids[idx]
-            mask_path = os.path.join(self.dir_path, "new_masks_640_1280", mask_id)
+            # Resolve mask from image entry (supports tuples and _gen names)
+            entry = self.image_ids[idx]
+            _, mask_path = self._resolve_paths_from_entry(entry)
             mask = cv2.imread(mask_path, cv2.IMREAD_GRAYSCALE)
             
             if mask is None:
-                print(f"Warning: Mask not found for image {image_id}. Skipping.")
+                print(f"Warning: Mask not found for image {entry}. Skipping.")
                 continue  # Skip if mask cannot be read
             
             # Convert mask values to class labels
@@ -70,11 +105,11 @@ class Dataset(BaseDataset):
             # Check if any of the classes_to_exclude are present in the mask
             if not np.isin(self.classes_to_exclude, multiclass_mask).any():
                 # If none of the excluded classes are present, keep the image
-                filtered_image_ids.append(image_id)
-                filtered_mask_ids.append(mask_id)
+                filtered_image_ids.append(entry)
+                filtered_mask_ids.append(os.path.basename(mask_path))
             else:
                 # Exclude the image
-                excluded_images.append(image_id)
+                excluded_images.append(str(entry))
         
         print(f"Excluded {len(excluded_images)} images containing classes {self.classes_to_exclude}")
         self.image_ids = filtered_image_ids
@@ -159,13 +194,20 @@ class Dataset(BaseDataset):
 
     def __getitem__(self, ind):
         # Load image and mask
-        image_path = os.path.sep.join([self.dir_path, "new_images_640_1280", self.image_ids[ind]])
-        mask_path = os.path.sep.join([self.dir_path, "new_masks_640_1280", self.mask_ids[ind]])
+        # image_path = os.path.sep.join([self.dir_path, "new_images_640_1280", self.image_ids[ind]])
+        # mask_path = os.path.sep.join([self.dir_path, "new_masks_640_1280", self.mask_ids[ind]])
+        image_path, mask_path = self._resolve_paths_from_entry(self.image_ids[ind])
 
         image = cv2.imread(image_path, cv2.IMREAD_COLOR)
         mask = cv2.imread(mask_path, cv2.IMREAD_GRAYSCALE)
 
         if image is None or mask is None:
+            if mask is None:
+                warnings.warn(
+                    f"[Dataset] Mask not found for image entry {self.image_ids[ind]} (looked for {mask_path}). "
+                    f"If this is a generated image ('*_gen.png'), ensure a matching mask exists without the '_gen' suffix.",
+                    RuntimeWarning
+                )
             raise ValueError("mask is none")
         
 
@@ -335,6 +377,38 @@ class TransformerDataset(BaseDataset):
     def __len__(self):
         return len(self.image_ids)
 
+    def _resolve_paths_from_entry(self, entry):
+        """
+        Accepts:
+        - str:                  "image.png"
+        - (folder, image):      (".../images", "image.png")
+        - (folder, image, mask) (".../images", "image_gen.png", "image.png")
+        Returns (image_path, mask_path). For 2-tuple or str, derive mask by stripping '_gen' and using .png.
+        """
+        if isinstance(entry, (list, tuple)):
+            if len(entry) == 3:
+                img_folder, img_name, mask_name = entry
+            elif len(entry) == 2:
+                img_folder, img_name = entry
+                base, _ext = os.path.splitext(os.path.basename(img_name))
+                if base.endswith("_gen"):
+                    base = base[:-4]
+                mask_name = base + ".png"
+            else:
+                raise TypeError(f"Unsupported entry tuple length {len(entry)} for: {entry}")
+        else:
+            img_folder = os.path.join(self.dir_path, "new_images_640_1280")
+            img_name = entry
+            base, _ext = os.path.splitext(os.path.basename(entry))
+            if base.endswith("_gen"):
+                base = base[:-4]
+            mask_name = base + ".png"
+
+        image_path = os.path.join(img_folder, img_name)
+        mask_path = os.path.join(self.dir_path, "new_masks_640_1280", mask_name)
+        return image_path, mask_path
+
+
     def detect_and_crop(self, image, mask):
         """
         (Optional) YOLO-based detection, then crop & resize. Returns PIL images.
@@ -419,8 +493,9 @@ class TransformerDataset(BaseDataset):
 
     def __getitem__(self, idx):
         # 1) Load image & mask paths
-        image_path = os.path.join(self.dir_path, "new_images_640_1280", self.image_ids[idx])
-        mask_path = os.path.join(self.dir_path, "new_masks_640_1280", self.mask_ids[idx])
+        # image_path = os.path.join(self.dir_path, "new_images_640_1280", self.image_ids[idx])
+        # mask_path = os.path.join(self.dir_path, "new_masks_640_1280", self.mask_ids[idx])
+        image_path, mask_path = self._resolve_paths_from_entry(self.image_ids[idx])
 
         # 2) Load image & mask using OpenCV
         image_cv2 = cv2.imread(image_path, cv2.IMREAD_COLOR)

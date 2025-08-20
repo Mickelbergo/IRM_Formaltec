@@ -6,7 +6,7 @@ import albumentations as A
 from albumentations.pytorch import ToTensorV2
 
 class Augmentation:
-    def __init__(self, target_size, preprocessing_fn=None, config_path='New_Code/configs/preprocessing_config.json'):
+    def __init__(self, target_size, preprocessing_fn=None, config_path='Code/configs/preprocessing_config.json'):
         self.target_size = target_size
         self.preprocessing_fn = preprocessing_fn
         with open(config_path) as f:
@@ -55,9 +55,9 @@ class Augmentation:
         if aug_cfg.get('coarse_dropout', {}).get('enabled', False):
             cd = aug_cfg['coarse_dropout']
             transforms.append(A.CoarseDropout(
-                max_holes=cd.get('max_holes', 8),
-                max_height=cd.get('max_height', 32),
-                max_width=cd.get('max_width', 32),
+                num_holes_range=cd.get('num_holes_range', [1,8]),
+                hole_height_range=cd.get('hole_height_range', [1,32]),
+                hole_width_range=cd.get('hole_width_range', [1,32]),
                 p=cd.get('p', 0.3)
             ))
         # Gaussian Blur

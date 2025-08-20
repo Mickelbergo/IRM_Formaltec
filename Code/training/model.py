@@ -21,7 +21,7 @@ class UNetWithClassification(nn.Module):
                 activation=activation
             )
         else:
-            self.segmentation_model = smp.FPN(
+            self.segmentation_model = smp.UnetPlusPlus(
                 encoder_name=encoder_name, #resnet, mit_b5, etc -> segmentation_models.pytorch 
                 encoder_weights=encoder_weights,
                 classes=classes,

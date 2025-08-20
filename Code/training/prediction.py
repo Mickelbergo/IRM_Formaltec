@@ -13,9 +13,9 @@ import ssl
 ssl._create_default_https_context = ssl._create_unverified_context
 
 # Load configurations from the config files
-with open('New_Code/configs/training_config.json') as f:
+with open('Code/configs/training_config.json') as f:
     train_config = json.load(f)
-with open('New_Code/configs/preprocessing_config.json') as f:
+with open('Code/configs/preprocessing_config.json') as f:
     preprocessing_config = json.load(f)
 
 # Set device from config

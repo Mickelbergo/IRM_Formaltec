@@ -144,7 +144,7 @@ class TrainEpoch(Epoch):
         self.optimizer = optimizer
         self.mixed_prec = mixed_prec
         self.grad_clip_value = grad_clip_value
-        self.scaler = torch.cuda.amp.GradScaler()  # Initialize GradScaler for mixed precision
+        self.scaler = torch.amp.GradScaler('cuda')  # Initialize GradScaler for mixed precision
         #makes training way faster
 
     def on_epoch_start(self):

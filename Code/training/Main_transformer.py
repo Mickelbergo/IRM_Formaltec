@@ -233,10 +233,10 @@ def train_once(train_config, preprocessing_config, train_ids, valid_ids, path, p
 
 def main():
     # Load configurations
-    with open('New_Code/configs/training_config.json') as f:
+    with open('Code/configs/training_config.json') as f:
         train_config = json.load(f)
 
-    with open('New_Code/configs/preprocessing_config.json') as f:
+    with open('Code/configs/preprocessing_config.json') as f:
         preprocessing_config = json.load(f)
 
     # Device configuration
