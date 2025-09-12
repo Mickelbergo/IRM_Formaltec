@@ -11,7 +11,8 @@
             "model_name": "facebook/dinov2-giant",
             "target_layer": "decoder1.0",
             "stage1_epochs": 15,
-            "unfreeze_layers": 16
+            "unfreeze_layers": 16,
+            "fine_tune_lr_factor": 0.1
         },
         "encoder_weights": "noisy-student-475",
         "activation": null,
@@ -24,11 +25,11 @@
         "split_ratio": 0.8,
         "metrics": ["accuracy", "iou_score"],
         "sampler": false,
-        "grad_clip_value": 0.2,
-        "display_image": true,
+        "grad_clip_value": 0.1,
+        "display_image": false,
         "num_workers": 1,
         "mixed_precision": true,
-        "use_diffusion_images": true,
+        "use_diffusion_images": false,
         "valid_extensions": [".jpg", ".jpeg", ".png", ".bmp", ".tiff"],
         "final_model_epoch": 150,
         "f1_average": "macro",
@@ -41,9 +42,6 @@
             "reduction": "mean"
         },
         "progressive_training": true,
-        "stage1_epochs_ratio": 0.6,
-        "fine_tune_lr_ratio": 0.2,
-        "unfreeze_layers": 4,
         "grid_search_enabled": true,
         "non_grid_search": {
             "use_focal_loss": true,

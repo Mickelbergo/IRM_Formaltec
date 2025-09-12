@@ -315,39 +315,17 @@ def run_gradcam_visualization(model, train_config, valid_loader, valid_ids, path
         return base + ".png"
 
     os.makedirs('gradcam_outputs', exist_ok=True)
-    
-    # Save current model weights
-    temp_model_path = 'gradcam_outputs/temp_model.pth'
-    torch.save(model.state_dict(), temp_model_path)
-    
-    # Create model for GradCAM
+        # FIX: Use the existing model instead of creating a new one
     encoder = get_config(train_config, "model", "encoder", legacy_key="encoder")
     if encoder == "vit":
-        gradcam_model = UNetWithViT(
-            classes=get_config(train_config, "model", "segmentation_classes", legacy_key="segmentation_classes"),
-            activation=get_config(train_config, "model", "activation", legacy_key="activation"),
-            model_name= get_vit_model_name(train_config)
-        )
         target_layer = get_vit_target_layer(train_config)
     elif encoder == "transformer":
-        gradcam_model = UNetWithSwinTransformer(
-            classes=get_config(train_config, "model", "segmentation_classes", legacy_key="segmentation_classes"), 
-            activation=get_config(train_config, "model", "activation", legacy_key="activation")
-        )
         target_layer = "up4.0"
     else:
-        gradcam_model = UNetWithClassification(
-            encoder_name=encoder,
-            encoder_weights=get_config(train_config, "model", "encoder_weights", legacy_key="encoder_weights"),
-            classes=get_config(train_config, "model", "segmentation_classes", legacy_key="segmentation_classes"),
-            activation=None
-        )
         target_layer = "segmentation_model.decoder.seg_blocks.3.block.0.block.2"
     
-    gradcam_model.load_state_dict(torch.load(temp_model_path, map_location=device))
-    gradcam_model = gradcam_model.to(device)
-    gradcam_model.eval()
-    
+    # Use the existing trained model directly
+    model.eval()
     # Get validation batch
     val_batch = next(iter(valid_loader))
     images = val_batch['image'] if isinstance(val_batch, dict) else val_batch[0]
@@ -368,7 +346,7 @@ def run_gradcam_visualization(model, train_config, valid_loader, valid_ids, path
             target_class = 0
 
         save_path = f'gradcam_outputs/gridsearch{stage_str}_epoch{epoch+1}_sample{idx+1}.png'
-        visualize_gradcam(gradcam_model, input_tensor, target_class, target_layer, save_path=save_path, show=False)
+        visualize_gradcam(model, input_tensor, target_class, target_layer, save_path=save_path, show=False)
         print(f"Saved Grad-CAM visualization: {save_path} (target_class={target_class})")
 
 def train_single_epoch(model, train_epoch, valid_epoch, train_loader, valid_loader, epoch, total_epochs, hyperparams):
@@ -438,7 +416,9 @@ def train_progressive(model, train_epoch, valid_epoch, train_loader, valid_loade
         print(f"After unfreezing - Trainable: {trainable_params:,} / {total_params:,} ({100*trainable_params/total_params:.1f}%)")
     
     # Create new optimizer with lower learning rate
-    fine_tune_lr = hyperparams['lr'] * 0.1
+    vit_config = get_config(train_config, "model", "vit_config")
+
+    fine_tune_lr = hyperparams['lr'] * get_config(vit_config, "fine_tune_lr_factor")
     if hyperparams['optimizer_choice'] == 'adamw':
         optimizer_ft = torch.optim.AdamW(
             filter(lambda p: p.requires_grad, model.parameters()),
