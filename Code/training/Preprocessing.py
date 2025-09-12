@@ -356,6 +356,7 @@ class TransformerDataset(BaseDataset):
             use_background_extraction (bool): Whether to randomly crop a background patch.
             processor_name (str): HF processor checkpoint name for segmentation.
         """
+
         self.dir_path = dir_path
         self.image_ids = image_ids
         self.mask_ids = mask_ids
@@ -515,7 +516,7 @@ class TransformerDataset(BaseDataset):
                 mode = np.random.choice(["yolo", "resize", "background"], p=[0.2, 0.7, 0.1])
             else:
                 # Example probabilities: YOLO=0.4, resize=0.6
-                mode = np.random.choice(["yolo", "resize"], p=[0.4, 0.6])
+                mode = np.random.choice(["yolo", "resize"], p=[0.2, 0.8])
 
             if mode == "yolo" and self.detection_model:
                 image, mask = self.detect_and_crop(image, mask)
