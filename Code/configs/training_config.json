@@ -34,7 +34,7 @@
         "final_model_epoch": 150,
         "f1_average": "macro",
         "dice_loss_mode": "multiclass",
-        "gradCAM": true,
+        "gradCAM": false,
         "random_seed": 42,
         "focal_loss": {
             "alpha": 0.5,

@@ -300,6 +300,7 @@ def run_gradcam_visualization(model, train_config, valid_loader, valid_ids, path
         return
 
     def _entry_to_mask_filename(entry):
+        """Convert entry to mask filename"""
         if isinstance(entry, (list, tuple)):
             if len(entry) == 3:
                 return entry[2]
@@ -313,10 +314,12 @@ def run_gradcam_visualization(model, train_config, valid_loader, valid_ids, path
         if base.endswith("_gen"):
             base = base[:-4]
         return base + ".png"
-
+    
+    # Setup directories and get encoder type
     os.makedirs('gradcam_outputs', exist_ok=True)
-        # FIX: Use the existing model instead of creating a new one
     encoder = get_config(train_config, "model", "encoder", legacy_key="encoder")
+    
+    # Get target layer based on encoder type
     if encoder == "vit":
         target_layer = get_vit_target_layer(train_config)
     elif encoder == "transformer":
@@ -324,31 +327,70 @@ def run_gradcam_visualization(model, train_config, valid_loader, valid_ids, path
     else:
         target_layer = "segmentation_model.decoder.seg_blocks.3.block.0.block.2"
     
-    # Use the existing trained model directly
-    model.eval()
-    # Get validation batch
+    # Get stage string and validation batch
+    stage_str = f"_{stage}" if stage else ""
     val_batch = next(iter(valid_loader))
     images = val_batch['image'] if isinstance(val_batch, dict) else val_batch[0]
     image_ids_batch = val_batch['image_id'] if isinstance(val_batch, dict) and 'image_id' in val_batch else valid_ids[:images.shape[0]]
     mask_dir = os.path.join(path, "new_masks_640_1280")
     
-    stage_str = f"_{stage}" if stage else ""
-    
-    for idx in range(min(2, images.shape[0])):
-        input_tensor = images[idx:idx+1].to(device)
-        entry = image_ids_batch[idx] if idx < len(image_ids_batch) else None
-        
-        if entry is not None:
-            mask_name = _entry_to_mask_filename(entry)
-            mask_path = os.path.join(mask_dir, mask_name)
-            target_class = get_most_frequent_foreground_class(mask_path) if os.path.exists(mask_path) else 0
+    # Create separate model instance for GradCAM to avoid hook conflicts
+    try:
+        if encoder == "transformer":
+            gradcam_model = UNetWithSwinTransformer(
+                classes=get_config(train_config, "model", "segmentation_classes", legacy_key="segmentation_classes"),
+                activation=get_config(train_config, "model", "activation", legacy_key="activation")
+            )
+        elif encoder == "vit":
+            gradcam_model = UNetWithViT(
+                classes=get_config(train_config, "model", "segmentation_classes", legacy_key="segmentation_classes"),
+                activation=get_config(train_config, "model", "activation", legacy_key="activation"),
+                model_name=get_vit_model_name(train_config)
+            )
         else:
-            target_class = 0
+            # Standard segmentation models (efficientnet, resnet, etc.)
+            gradcam_model = UNetWithClassification(
+                encoder_name=encoder,
+                encoder_weights=get_config(train_config, "model", "encoder_weights", legacy_key="encoder_weights"),
+                classes=get_config(train_config, "model", "segmentation_classes", legacy_key="segmentation_classes"),
+                activation=None
+            )
+        
+        # Load current weights and set to evaluation mode
+        gradcam_model.load_state_dict(model.state_dict())
+        gradcam_model = gradcam_model.to(device)
+        gradcam_model.eval()
+        
+        # Process samples for GradCAM
+        for idx in range(min(2, images.shape[0])):
+            input_tensor = images[idx:idx+1].to(device)
+            entry = image_ids_batch[idx] if idx < len(image_ids_batch) else None
+            
+            # Determine target class
+            if entry is not None:
+                mask_name = _entry_to_mask_filename(entry)
+                mask_path = os.path.join(mask_dir, mask_name)
+                target_class = get_most_frequent_foreground_class(mask_path) if os.path.exists(mask_path) else 0
+            else:
+                target_class = 0
 
-        save_path = f'gradcam_outputs/gridsearch{stage_str}_epoch{epoch+1}_sample{idx+1}.png'
-        visualize_gradcam(model, input_tensor, target_class, target_layer, save_path=save_path, show=False)
-        print(f"Saved Grad-CAM visualization: {save_path} (target_class={target_class})")
-
+            save_path = f'gradcam_outputs/gridsearch{stage_str}_epoch{epoch+1}_sample{idx+1}.png'
+            
+            # Generate GradCAM visualization
+            try:
+                visualize_gradcam(gradcam_model, input_tensor, target_class, target_layer, save_path=save_path, show=False)
+                print(f"Saved Grad-CAM visualization: {save_path} (target_class={target_class})")
+            except Exception as e:
+                print(f"GradCAM failed for {save_path}: {e}")
+                
+    except Exception as e:
+        print(f"Failed to create GradCAM model for encoder '{encoder}': {e}")
+        
+    finally:
+        # Clean up the separate model
+        if 'gradcam_model' in locals():
+            del gradcam_model
+        torch.cuda.empty_cache()
 def train_single_epoch(model, train_epoch, valid_epoch, train_loader, valid_loader, epoch, total_epochs, hyperparams):
     """Train a single epoch and return logs"""
     print(f"Epoch {epoch + 1}/{total_epochs}  (lambda={hyperparams['lambdaa']}, sampler={hyperparams['sampler_option']}, "
