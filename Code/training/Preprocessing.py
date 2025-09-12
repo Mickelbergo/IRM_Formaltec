@@ -232,7 +232,7 @@ class Dataset(BaseDataset):
 
 
         #change this if you want, with probability p[0], a cropped wound image is used and with p[1] the original image is used
-        mode = np.random.choice(["yolo", "resize"], p = [0.2,0.8])
+        mode = np.random.choice(["yolo", "resize"], p = [0.4,0.6])
 
         if self.augmentation == "train":
             
@@ -514,8 +514,8 @@ class TransformerDataset(BaseDataset):
                 # Example probabilities: YOLO=0.2, resize=0.7, background=0.1
                 mode = np.random.choice(["yolo", "resize", "background"], p=[0.2, 0.7, 0.1])
             else:
-                # Example probabilities: YOLO=0.2, resize=0.8
-                mode = np.random.choice(["yolo", "resize"], p=[0.2, 0.8])
+                # Example probabilities: YOLO=0.4, resize=0.6
+                mode = np.random.choice(["yolo", "resize"], p=[0.4, 0.6])
 
             if mode == "yolo" and self.detection_model:
                 image, mask = self.detect_and_crop(image, mask)

@@ -24,9 +24,12 @@ import time
 
 ssl._create_default_https_context = ssl._create_unverified_context
 
-# Utility function for config access
-# Use new structured config if available, else fallback to legacy
+
 def get_config(cfg, *keys, legacy_key=None):
+    """
+    Utility function for config access
+    Uses new structured config if available, else fallback to legacy
+    """
     d = cfg
     for k in keys:
         if isinstance(d, dict) and k in d:
@@ -64,7 +67,9 @@ def rescale_weights(original_weights, weight_range=(50, 200)):
     return rescaled_weights
 
 def worker_init_fn(worker_id):
-    # Initialize random seed for each worker
+    """
+    Initialize random seed for each worker
+    """
     seed = torch.initial_seed() % 2 ** 32
     np.random.seed(seed)
     random.seed(seed)
@@ -351,7 +356,7 @@ def main():
     DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
     print(f'Initializing Device: {DEVICE}')
 
-    # Pretty print of all relevant parameters (using new structure)
+    #  print of all relevant parameters (using new structure)
     print("\n==== Training Setup ====")
     print(f"Batch size: {get_config(train_config, 'training', 'batch_size')}")
     print(f"Num epochs: {get_config(train_config, 'training', 'num_epochs')}")
@@ -435,7 +440,7 @@ def main():
         loss_functions = gs_params.get("loss_functions", ["dice", "focal_loss"])
         lambda_list = gs_params.get("lambda_loss", [1, 5, 10])
 
-        # We keep your two-mode "loss_combination" mapping for Trainer:
+        # We keep two-mode "loss_combination" mapping for Trainer:
         # - if 'dice' in loss_functions AND use_focal_loss False => "dice+ce"
         # - if use_focal_loss True => "focal+ce"
         global_best_iou = 0.0
@@ -481,7 +486,7 @@ def main():
         use_focal_loss = bool(ngs.get("use_focal_loss", True))
         lr = ngs.get("learning_rate", 3e-4)
         optimizer_choice = ngs.get("optimizer", "adamw")
-        # keep your two-mode combination
+        # keep two-mode combination
         loss_combination = 'focal+ce' if use_focal_loss else 'dice+ce'
 
         # Ensure scheduler gamma is present for the non-grid path

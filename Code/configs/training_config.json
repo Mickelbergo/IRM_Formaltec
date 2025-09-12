@@ -6,10 +6,10 @@
     },
     "model": {
         "version": "v1.5",
-        "encoder": "timm-efficientnet-l2",
+        "encoder": "transformer",
         "encoder_weights": "noisy-student-475",
         "activation": null,
-        "segmentation_classes": 2,
+        "segmentation_classes": 11,
         "class_weights": [1, 60]
     },
     "training": {
@@ -17,9 +17,9 @@
         "num_epochs": 100,
         "split_ratio": 0.8,
         "metrics": ["accuracy", "iou_score"],
-        "sampler": true,
+        "sampler": false,
         "grad_clip_value": 10,
-        "display_image": false,
+        "display_image": true,
         "num_workers": 1,
         "mixed_precision": true,
         "use_diffusion_images": true,
@@ -36,22 +36,22 @@
         },
         "grid_search_enabled": false,
         "non_grid_search": {
-            "use_focal_loss": false,
-            "learning_rate": 0.0008,
+            "use_focal_loss": true,
+            "learning_rate": 0.0004,
             "optimizer": "adamw",
             "lr_scheduler_gamma": 0.999,
             "weight_range_multiclass": [50, 200],
             "loss_functions": ["dice"],
-            "lambda_loss": 15
+            "lambda_loss": 10
 
         },
         "grid_search_parameters": {
-            "learning_rate": [0.0005, 0.0001, 0.0003, 0.001],
+            "learning_rate": [0.0005, 0.0001, 0.0003, 0.004],
             "optimizer": ["adamw", "sgd"],
             "lr_scheduler_gamma": [0.999, 0.99, 0.9999],
-            "use_focal_loss": [false, true],
+            "use_focal_loss": [true, false],
             "loss_functions": ["dice", "focal_loss"],
-            "lambda_loss": [5, 1, 10]
+            "lambda_loss": [8, 5, 10, 1]
         }
 
 

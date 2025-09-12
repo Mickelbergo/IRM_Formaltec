@@ -18,10 +18,10 @@
         "gaussian_blur": {"enabled": true, "blur_limit": [3, 7], "p": 0.2}
     },
     "target_size": [384, 384],
-    "segmentation": "binary",
+    "segmentation": "multiclass",
     "yolo_path": "E:/projects/Wound_Segmentation_III/Data/YOLO",
     "exclude_images_with_classes": true,
-    "classes_to_exclude": [3, 5, 7, 9, 10],
+    "classes_to_exclude": [ 7, 9, 10],
     "class_names": {
         "0": "background",
         "1": "ungeformer_bluterguss",
