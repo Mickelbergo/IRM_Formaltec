@@ -67,6 +67,14 @@ class Augmentation:
                 blur_limit=tuple(gb.get('blur_limit', [3, 7])),
                 p=gb.get('p', 0.2)
             ))
+        # CLAHE
+        if aug_cfg.get('clahe', {}).get('enabled', False):
+            clahe = aug_cfg['clahe']
+            transforms.append(A.CLAHE(
+                clip_limit=clahe.get('clip_limit', 4.0),
+                tile_grid_size=tuple(clahe.get('tile_grid_size', [8, 8])),
+                p=clahe.get('p', 0.5)
+            ))
         # ToTensor
         transforms.append(ToTensorV2())
         self.transform = A.Compose(transforms, additional_targets={'mask': 'mask'})

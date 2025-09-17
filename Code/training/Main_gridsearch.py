@@ -21,6 +21,9 @@ from collections import Counter
 from PIL import Image
 import warnings
 import time
+import signal
+import threading
+
 
 ssl._create_default_https_context = ssl._create_unverified_context
 
@@ -110,7 +113,8 @@ def create_model(train_config):
         model = UNetWithViT(
             classes=get_config(train_config, "model", "segmentation_classes", legacy_key="segmentation_classes"),
             activation=get_config(train_config, "model", "activation", legacy_key="activation"),
-            model_name=get_vit_model_name(train_config)  # CHANGE THIS LINE
+            model_name=get_vit_model_name(train_config),
+            dropout_rate=get_config(train_config, "model", "vit_config", "dropout_rate", legacy_key="dropout_rate")
         )
         use_progressive = True
         
@@ -175,7 +179,7 @@ def create_datasets(train_config, preprocessing_config, train_ids, valid_ids, pa
 def create_optimizer_and_scheduler(model, optimizer_choice, lr, train_config, grid_search):
     """Create optimizer and scheduler"""
     if optimizer_choice == 'adamw':
-        optimizer = torch.optim.AdamW(model.parameters(), lr=lr, weight_decay=1e-4)
+        optimizer = torch.optim.AdamW(model.parameters(), lr=lr, weight_decay=get_config(train_config, "training", "weight_decay", legacy_key="weight_decay"))
     elif optimizer_choice == "sgd":
         optimizer = torch.optim.SGD(model.parameters(), lr=lr, momentum=0.9, weight_decay=1e-4)
     else:
@@ -258,12 +262,67 @@ def create_data_loaders(train_dataset, valid_dataset, train_config, preprocessin
     
     return train_loader, valid_loader
 
+class TrainingController:
+    def __init__(self, train_config):
+        self.display_image = get_config(train_config, "training", "display_image", legacy_key="display_image")
+        self.save_models = get_config(train_config, "training", "save_models", legacy_key="save_models")
+        self.run_gradcam = get_config(train_config, "training", "gradCAM", legacy_key="gradCAM")
+        
+    def toggle_display(self):
+        self.display_image = not self.display_image
+        print(f"Image display {'enabled' if self.display_image else 'disabled'}")
+    
+    def toggle_saving(self):
+        self.save_models = not self.save_models
+        print(f"Model saving {'enabled' if self.save_models else 'disabled'}")
+    
+    def toggle_gradcam(self):
+        self.run_gradcam = not self.run_gradcam
+        print(f"GradCAM {'enabled' if self.run_gradcam else 'disabled'}")
+
+
+def setup_keyboard_controls():
+    """Setup keyboard controls for training"""
+    def signal_handler(signum, frame):
+        print("\n=== Training Controls ===")
+        print("Press 'd' + Enter to toggle image display")
+        print("Press 's' + Enter to toggle model saving") 
+        print("Press 'g' + Enter to toggle GradCAM")
+        print("Press 'c' + Enter to continue training")
+        print("Press 'q' + Enter to quit")
+        
+        while True:
+            try:
+                choice = input("Choice: ").lower().strip()
+                if choice == 'd':
+                    training_controller.toggle_display()
+                    break
+                elif choice == 's':
+                    training_controller.toggle_saving()
+                    break
+                elif choice == 'g':
+                    training_controller.toggle_gradcam()
+                    break
+                elif choice == 'c':
+                    print("Continuing training...")
+                    break
+                elif choice == 'q':
+                    print("Exiting training...")
+                    exit(0)
+                else:
+                    print("Invalid choice. Try again.")
+            except KeyboardInterrupt:
+                print("\nExiting training...")
+                exit(0)
+    
+    signal.signal(signal.SIGINT, signal_handler)
+
 def create_epoch_runners(model, CE_Loss, DICE_Loss, Focal_loss, lambdaa, segmentation, optimizer, scheduler, train_config, device):
     """Create train and validation epoch runners"""
     train_epoch = TrainEpoch(
         model, CE_Loss, DICE_Loss, Focal_loss, lambdaa, segmentation, optimizer, device=device,
         grad_clip_value=get_config(train_config, "training", "grad_clip_value", legacy_key="grad_clip_value"),
-        display_image=get_config(train_config, "training", "display_image", legacy_key="display_image"), 
+        display_image=training_controller.display_image, 
         nr_classes=get_config(train_config, "model", "segmentation_classes", legacy_key="segmentation_classes"), 
         scheduler=scheduler, 
         mixed_prec=get_config(train_config, "training", "mixed_precision", legacy_key="mixed_precision")
@@ -271,7 +330,7 @@ def create_epoch_runners(model, CE_Loss, DICE_Loss, Focal_loss, lambdaa, segment
     
     valid_epoch = ValidEpoch(
         model, CE_Loss, DICE_Loss, Focal_loss, lambdaa, segmentation, device=device,
-        display_image=get_config(train_config, "training", "display_image", legacy_key="display_image"), 
+        display_image=training_controller.display_image, 
         nr_classes=get_config(train_config, "model", "segmentation_classes", legacy_key="segmentation_classes"), 
         scheduler=scheduler, 
         mixed_prec=get_config(train_config, "training", "mixed_precision", legacy_key="mixed_precision")
@@ -281,6 +340,11 @@ def create_epoch_runners(model, CE_Loss, DICE_Loss, Focal_loss, lambdaa, segment
 
 def save_best_model(model_state, train_config, encoder, segmentation, lambdaa, optimizer_choice, lr, loss_combination, weight_range, sampler_option, epoch, iou, f1, path, stage=""):
     """Save the best model with descriptive filename"""
+
+    if not training_controller.save_models:
+        print("Model saving is disabled. Skipping save.")
+        return
+    
     wr_str = f"{weight_range[0]}_{weight_range[1]}"
     stage_str = f"_{stage}" if stage else ""
     
@@ -296,6 +360,10 @@ def save_best_model(model_state, train_config, encoder, segmentation, lambdaa, o
 
 def run_gradcam_visualization(model, train_config, valid_loader, valid_ids, path, device, epoch, stage=""):
     """Run GradCAM visualization if enabled"""
+    if not training_controller.run_gradcam:
+        print("GradCAM is disabled. Skipping GradCAM visualization.")
+        return
+    
     if not get_config(train_config, 'training', 'gradCAM', legacy_key='gradCAM') or epoch % 5 != 0:
         return
 
@@ -433,11 +501,13 @@ def train_progressive(model, train_epoch, valid_epoch, train_loader, valid_loade
             max_score = current_iou
             best_f1 = current_f1
             best_model_state = model.state_dict()
-            save_best_model(best_model_state, train_config, hyperparams['encoder'], hyperparams['segmentation'],
-                          hyperparams['lambdaa'], hyperparams['optimizer_choice'], hyperparams['lr'],
-                          hyperparams['loss_combination'], hyperparams['weight_range'], hyperparams['sampler_option'],
-                          epoch, current_iou, current_f1, path, "stage1")
-        
+            if train_config.get("training", {}).get("save_intermediate_models", False):
+                print("Model saving is disabled. Skipping save.")
+                save_best_model(best_model_state, train_config, hyperparams['encoder'], hyperparams['segmentation'],
+                              hyperparams['lambdaa'], hyperparams['optimizer_choice'], hyperparams['lr'],
+                              hyperparams['loss_combination'], hyperparams['weight_range'], hyperparams['sampler_option'],
+                              epoch, current_iou, current_f1, path, "stage1")
+
         run_gradcam_visualization(model, train_config, valid_loader, valid_ids, path, device, epoch, "stage1")
     
     # Stage 2: Unfreeze encoder
@@ -738,6 +808,13 @@ def main():
     with open('Code/configs/preprocessing_config.json') as f:
         preprocessing_config = json.load(f)
 
+    # Setup training controller and keyboard controls
+    global training_controller
+    training_controller = TrainingController(train_config)
+
+    setup_keyboard_controls()
+
+
     # Setup device
     device = "cuda" if torch.cuda.is_available() else "cpu"
     print(f'Initializing Device: {device}')
@@ -760,6 +837,10 @@ def main():
         )
     else:
         preprocessing_fn = None
+
+
+    # press ctryl+c to access training controls
+    print("🎮 TRAINING CONTROLS: Press Ctrl+C anytime during training to access controls!")
 
     # Run training
     grid_enabled = bool(get_config(train_config, "training", "grid_search_enabled"))

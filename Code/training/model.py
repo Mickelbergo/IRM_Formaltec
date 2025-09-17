@@ -89,7 +89,7 @@ class UNetWithViT(nn.Module):
     - Multi-scale feature extraction
     - Robust to domain shifts
     """
-    def __init__(self, classes=2, activation=None, model_name="facebook/dinov2-base"):
+    def __init__(self, classes=2, activation=None, model_name="facebook/dinov2-base", dropout_rate=0.3):
         super(UNetWithViT, self).__init__()
         
         # Available DINOv2 models (choose based on computational budget):
@@ -99,6 +99,7 @@ class UNetWithViT(nn.Module):
         # "facebook/dinov2-giant" - 1.1B params, 1536 dim (best performance)
         
         self.model_name = model_name
+        self.dropout_rate = dropout_rate
         
         # Load pre-trained DINOv2 model
         print(f"Loading {model_name}...")
@@ -151,6 +152,9 @@ class UNetWithViT(nn.Module):
         self.late_proj = init_proj_layer(self.hidden_size, self.feature_dims['late'])
         self.final_proj = init_proj_layer(self.hidden_size, self.feature_dims['final'])
 
+        #dropout
+        self.encoder_dropout = nn.Dropout(dropout_rate)
+        self.final_dropout = nn.Dropout(dropout_rate * 0.7)  # Slightly lower dropout before final layer
 
         # U-Net decoder with skip connections
         self.decoder4 = self._make_decoder_block(
@@ -248,6 +252,9 @@ class UNetWithViT(nn.Module):
         late_feat = self.late_proj(features['late'])
         final_feat = self.final_proj(features['final'])
         
+        # Apply dropout to final features
+        final_feat = self.encoder_dropout(final_feat)
+
         # U-Net decoder with skip connections
         # Start from deepest features
         x = final_feat
@@ -271,6 +278,9 @@ class UNetWithViT(nn.Module):
         x = F.interpolate(x, scale_factor=2, mode='bilinear', align_corners=True)
         x = self.decoder1(x)
         
+        # Apply dropout before final segmentation head
+        x = self.final_dropout(x)
+
         # Segmentation head
         x = self.segmentation_head(x)
         

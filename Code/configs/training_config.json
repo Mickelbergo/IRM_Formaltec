@@ -10,9 +10,10 @@
         "vit_config": {
             "model_name": "facebook/dinov2-giant",
             "target_layer": "decoder1.0",
-            "stage1_epochs": 15,
+            "stage1_epochs": 30,
             "unfreeze_layers": 16,
-            "fine_tune_lr_factor": 0.1
+            "fine_tune_lr_factor": 0.1,
+            "dropout_rate": 0.3
         },
         "encoder_weights": "noisy-student-475",
         "activation": null,
@@ -21,13 +22,15 @@
     },
     "training": {
         "batch_size": 8,
-        "num_epochs": 60,
+        "num_epochs": 100,
+        "weight_decay": 0.05,
+        "save_intermediate_models": false,
         "split_ratio": 0.8,
         "metrics": ["accuracy", "iou_score"],
         "sampler": false,
         "grad_clip_value": 0.1,
         "display_image": false,
-        "num_workers": 1,
+        "num_workers": 10,
         "mixed_precision": true,
         "use_diffusion_images": false,
         "valid_extensions": [".jpg", ".jpeg", ".png", ".bmp", ".tiff"],
@@ -42,15 +45,15 @@
             "reduction": "mean"
         },
         "progressive_training": true,
-        "grid_search_enabled": true,
+        "grid_search_enabled": false,
         "non_grid_search": {
-            "use_focal_loss": true,
-            "learning_rate": 0.0001,
+            "use_focal_loss": false,
+            "learning_rate": 0.00001,
             "optimizer": "adamw",
-            "lr_scheduler_gamma": 0.999,
-            "weight_range_multiclass": [10, 50],
+            "lr_scheduler_gamma": 0.9994,
+            "weight_range_multiclass": [5,10],
             "loss_functions": ["dice"],
-            "lambda_loss": 10
+            "lambda_loss": 15
 
         },
         "grid_search_parameters": {
