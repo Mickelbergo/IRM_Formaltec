@@ -5,15 +5,18 @@
     
     },
     "model": {
-        "version": "v1.5",
+        "version": "v1.6",
         "encoder": "vit",
         "vit_config": {
             "model_name": "facebook/dinov2-giant",
             "target_layer": "decoder1.0",
-            "stage1_epochs": 30,
-            "unfreeze_layers": 16,
-            "fine_tune_lr_factor": 0.1,
-            "dropout_rate": 0.3
+            "stage1_epochs": 20,
+            "stage2_epochs": 20,
+            "unfreeze_layers_stage2": 16,
+            "unfreeze_layers_stage3": 32,
+            "stage2_lr_factor": 0.5,
+            "stage3_lr_factor": 0.1,
+            "dropout_rate": 0.2
         },
         "encoder_weights": "noisy-student-475",
         "activation": null,
@@ -22,9 +25,9 @@
     },
     "training": {
         "batch_size": 8,
-        "num_epochs": 100,
-        "weight_decay": 0.05,
-        "save_intermediate_models": false,
+        "num_epochs": 70,
+        "weight_decay": 1e-4,
+        "save_intermediate_models": true,
         "split_ratio": 0.8,
         "metrics": ["accuracy", "iou_score"],
         "sampler": false,
@@ -45,24 +48,24 @@
             "reduction": "mean"
         },
         "progressive_training": true,
-        "grid_search_enabled": false,
+        "grid_search_enabled": true,
         "non_grid_search": {
             "use_focal_loss": false,
-            "learning_rate": 0.00001,
+            "learning_rate": 0.0001,
             "optimizer": "adamw",
-            "lr_scheduler_gamma": 0.9994,
-            "weight_range_multiclass": [5,10],
+            "lr_scheduler_gamma": 0.999,
+            "weight_range_multiclass": [10,50],
             "loss_functions": ["dice"],
-            "lambda_loss": 15
+            "lambda_loss": 12
 
         },
         "grid_search_parameters": {
-            "learning_rate": [0.0001, 0.0005, 0.0003, 0.004],
+            "learning_rate": [0.0001, 0.00001,0.000005],
             "optimizer": ["adamw"],
-            "lr_scheduler_gamma": [0.999, 0.99, 0.9999],
-            "use_focal_loss": [true, false],
-            "loss_functions": ["dice", "focal_loss"],
-            "lambda_loss": [10, 8, 5, 1]
+            "lr_scheduler_gamma": [0.999,  0.99990, 0.99],
+            "use_focal_loss": [false],
+            "loss_functions": ["dice"],
+            "lambda_loss": [12, 20,10,15]
         }
 
 

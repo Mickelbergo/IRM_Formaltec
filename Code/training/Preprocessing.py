@@ -10,7 +10,6 @@ import json
 import torch.nn.functional as F
 import matplotlib.pyplot as plt
 from PIL import Image
-from transformers import AutoImageProcessor
 from tqdm import tqdm
 import warnings
 
@@ -42,8 +41,16 @@ class Dataset(BaseDataset):
         self.classes_to_exclude = classes_to_exclude
         self.exclude_images_with_classes = exclude_images_with_classes
 
+        # Initialize augmentation pipelines once instead of every __getitem__ call
+        if augmentation == "train":
+            self.aug = Augmentation(self.target_size, self.preprocessing_fn)
+        elif augmentation == "validation":
+            self.aug = ValidationAugmentation(self.target_size, self.preprocessing_fn)
+        else:
+            self.aug = None
 
-        if(self.exclude_images_with_classes and self.preprocessing_config["segmentation"] == "multiclass"):
+        if (self.exclude_images_with_classes and 
+            self.preprocessing_config["segmentation"] == "multiclass"):
             self.filter_images()
 
     def _resolve_paths_from_entry(self, entry):
@@ -122,10 +129,12 @@ class Dataset(BaseDataset):
                 f.write(f"{img}\n")
         print(f"List of excluded images saved to {excluded_images_path}")
 
-    def detect_and_crop(self, image, mask, margin=200): #freely change the margin
+    def detect_and_crop(self, image, mask, margin=200): # freely change the margin
         """Detect regions using YOLO, add a margin around them, and crop image and mask."""
         if self.detection_model:
-            results = self.detection_model.predict(source=np.array(image), device=self.device, save=False, verbose=False)
+            results = self.detection_model.predict(
+                source=np.array(image), device=self.device, save=False, verbose=False
+            )
             detections = results[0].boxes
 
             if len(detections) > 0:
@@ -145,16 +154,13 @@ class Dataset(BaseDataset):
                 # Crop and resize image and mask
                 cropped_image = image.crop((x1, y1, x2, y2)).resize(self.target_size)
                 cropped_mask = mask.crop((x1, y1, x2, y2)).resize(self.target_size, Image.NEAREST)
+                return cropped_image, cropped_mask
             else:
                 # If no detection, fallback to resizing the entire image
-                #print("No YOLO detections found. Using full image resize.")
                 return self.resize(image, mask)
         else:
             # If no detection model is provided, resize the full image and mask
             return self.resize(image, mask)
-
-        return cropped_image, cropped_mask
-
 
     def resize(self, image, mask):
         """Resize image and mask to the target size."""
@@ -194,8 +200,6 @@ class Dataset(BaseDataset):
 
     def __getitem__(self, ind):
         # Load image and mask
-        # image_path = os.path.sep.join([self.dir_path, "new_images_640_1280", self.image_ids[ind]])
-        # mask_path = os.path.sep.join([self.dir_path, "new_masks_640_1280", self.mask_ids[ind]])
         image_path, mask_path = self._resolve_paths_from_entry(self.image_ids[ind])
 
         image = cv2.imread(image_path, cv2.IMREAD_COLOR)
@@ -210,41 +214,27 @@ class Dataset(BaseDataset):
                 )
             raise ValueError("mask is none")
         
-
         # Convert mask to binary segmentation mask
         binary_mask = (mask > 0).astype(np.uint8)
         # Convert mask values to class labels
-
         multiclass_mask = (mask // 15)  # Assuming mask values are wound_class * 15
-
-        multiclass_mask[np.isin(multiclass_mask, [11, 12, 13, 14])] = 6 #this gets rid of classes 11-14. #remove this (and recalculate weights) to revert
-
-
-        # Filter out background (class 0) and get non-background classes
-        non_background_pixels = multiclass_mask[multiclass_mask != 0]
-        dominant_class = 0
-
-
+        multiclass_mask[np.isin(multiclass_mask, [11, 12, 13, 14])] = 6 # remove unwanted classes
 
         image = Image.fromarray(image)
         binary_mask = Image.fromarray(binary_mask)
         multiclass_mask = Image.fromarray(multiclass_mask)
 
-
-        #change this if you want, with probability p[0], a cropped wound image is used and with p[1] the original image is used
-        mode = np.random.choice(["yolo", "resize"], p = [0.4,0.6])
+        # Change this if you want: with probability p[0], a cropped wound image is used and with p[1] the original image is used
+        mode = np.random.choice(["yolo", "resize"], p=[0.2, 0.8])
 
         if self.augmentation == "train":
-            
             if self.preprocessing_config["segmentation"] == "binary":
                 if mode == "yolo":
-                    image, binary_mask= self.detect_and_crop(image, binary_mask)
+                    image, binary_mask = self.detect_and_crop(image, binary_mask)
                 elif mode == "resize":
-                    image, binary_mask= self.resize(image, binary_mask)
+                    image, binary_mask = self.resize(image, binary_mask)
                 elif mode == "background":
-                    image, binary_mask= self.extract_background(image, binary_mask)
-                # else:
-                #     raise ValueError(f"Unknown mode: {mode}")
+                    image, binary_mask = self.extract_background(image, binary_mask)
 
             elif self.preprocessing_config["segmentation"] == 'multiclass':
                 if mode == "yolo":
@@ -253,15 +243,11 @@ class Dataset(BaseDataset):
                     image, multiclass_mask = self.resize(image, multiclass_mask)
                 elif mode == "background":
                     image, multiclass_mask = self.extract_background(image, multiclass_mask)
-                # else:
-                #     raise ValueError(f"Unknown mode: {mode}")
             
             else:
                 raise ValueError(f'segmentation must either be "binary" or "multiclass"')
             
-       
         # Convert to tensor 
-        #note that Kornia permutes the images directly, no need to manually permute
         image = np.array(image)
         binary_mask = np.array(binary_mask)
         multiclass_mask = np.array(multiclass_mask)
@@ -270,18 +256,12 @@ class Dataset(BaseDataset):
         binary_mask = K.image_to_tensor(binary_mask).long().to(self.device)  # Binary mask for segmentation
         multiclass_mask = K.image_to_tensor(multiclass_mask).long().to(self.device)  # Multiclass segmentation
 
-        #self.visualize_sample(image, multiclass_mask, binary_mask)
-
         # Apply augmentations
-        if self.augmentation == 'train':
+        if self.aug is not None:
             if self.preprocessing_config["segmentation"] == "binary":
-                image, binary_mask = Augmentation(self.target_size, self.preprocessing_fn).augment(image, binary_mask)
-            else: image, multiclass_mask = Augmentation(self.target_size, self.preprocessing_fn).augment(image, multiclass_mask)
-        
-        if self.augmentation == 'validation':
-            if self.preprocessing_config["segmentation"] == "binary":
-                image, binary_mask = ValidationAugmentation(self.target_size, self.preprocessing_fn).augment(image, binary_mask)
-            else: image, multiclass_mask = Augmentation(self.target_size, self.preprocessing_fn).augment(image, multiclass_mask)
+                image, binary_mask = self.aug.augment(image, binary_mask)
+            else:
+                image, multiclass_mask = self.aug.augment(image, multiclass_mask)
 
         return image, binary_mask, multiclass_mask, 0
     
@@ -292,7 +272,7 @@ class Dataset(BaseDataset):
 
     def visualize_sample(self, image, multiclass_mask, binary_mask):
         # Convert tensors back to numpy
-        image_np = K.tensor_to_image(image.cpu().long())
+        image_np = K.tensor_to_image(image.cpu())  # fixed: removed .long()
         binary_mask_np = binary_mask.cpu().numpy()[0]  # Assuming the mask has shape [1, H, W]
         multiclass_mask_np = multiclass_mask.cpu().numpy()[0]  # Assuming the mask has shape [1, H, W]
 
@@ -316,7 +296,6 @@ class Dataset(BaseDataset):
 
         plt.tight_layout()
         plt.show()
-
 
 
 class TransformerDataset(BaseDataset):

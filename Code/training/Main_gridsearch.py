@@ -459,12 +459,13 @@ def run_gradcam_visualization(model, train_config, valid_loader, valid_ids, path
         if 'gradcam_model' in locals():
             del gradcam_model
         torch.cuda.empty_cache()
-def train_single_epoch(model, train_epoch, valid_epoch, train_loader, valid_loader, epoch, total_epochs, hyperparams):
+def train_single_epoch(model, train_epoch, valid_epoch, train_loader, valid_loader, epoch, total_epochs, hyperparams, stage=""):
     """Train a single epoch and return logs"""
-    print(f"Epoch {epoch + 1}/{total_epochs}  (lambda={hyperparams['lambdaa']}, sampler={hyperparams['sampler_option']}, "
+    stage_str = f" ({stage})" if stage else ""
+    print(f"Epoch {epoch + 1}/{total_epochs}{stage_str}  (lambda={hyperparams['lambdaa']}, sampler={hyperparams['sampler_option']}, "
           f"weights={hyperparams['weight_range']}, loss_combo={hyperparams['loss_combination']}, "
           f"lr={hyperparams['lr']}, opt={hyperparams['optimizer_choice']})")
-
+    
     train_logs = train_epoch.run(train_loader)
     valid_logs = valid_epoch.run(valid_loader)
 
@@ -487,26 +488,29 @@ def train_progressive(model, train_epoch, valid_epoch, train_loader, valid_loade
     best_model_state = None
 
     vit_config = get_config(train_config, "model", "vit_config")
-    stage1_epochs = vit_config.get("stage1_epochs", total_epochs // 2) if vit_config else total_epochs // 2
 
+    # Define stage epochs
+    stage1_epochs = vit_config.get("stage1_epochs", 40)  # Default 40 epochs for Stage 1
+    stage2_epochs = vit_config.get("stage2_epochs", 30)  # Default 30 epochs for Stage 2  
+    stage3_epochs = total_epochs - stage1_epochs - stage2_epochs  # Remaining epochs for Stage 3
+    
     # Stage 1: Frozen encoder
     print(f"Stage 1: Training with frozen encoder for {stage1_epochs} epochs...")
     for epoch in range(stage1_epochs):
         current_iou, current_f1 = train_single_epoch(
             model, train_epoch, valid_epoch, train_loader, valid_loader, 
-            epoch, stage1_epochs, hyperparams
+            epoch, stage1_epochs, hyperparams, "Stage 1"
         )
         
         if current_iou > max_score:
             max_score = current_iou
             best_f1 = current_f1
             best_model_state = model.state_dict()
-            if train_config.get("training", {}).get("save_intermediate_models", False):
-                print("Model saving is disabled. Skipping save.")
-                save_best_model(best_model_state, train_config, hyperparams['encoder'], hyperparams['segmentation'],
-                              hyperparams['lambdaa'], hyperparams['optimizer_choice'], hyperparams['lr'],
-                              hyperparams['loss_combination'], hyperparams['weight_range'], hyperparams['sampler_option'],
-                              epoch, current_iou, current_f1, path, "stage1")
+
+            save_best_model(best_model_state, train_config, hyperparams['encoder'], hyperparams['segmentation'],
+                          hyperparams['lambdaa'], hyperparams['optimizer_choice'], hyperparams['lr'],
+                          hyperparams['loss_combination'], hyperparams['weight_range'], hyperparams['sampler_option'],
+                          epoch, current_iou, current_f1, path, "stage1")
 
         run_gradcam_visualization(model, train_config, valid_loader, valid_ids, path, device, epoch, "stage1")
     
@@ -515,7 +519,7 @@ def train_progressive(model, train_epoch, valid_epoch, train_loader, valid_loade
     if hasattr(model, 'unfreeze_encoder'):
         # CHANGE THIS LINE - add configuration option
         vit_config = get_config(train_config, "model", "vit_config") or {}
-        unfreeze_layers = vit_config.get("unfreeze_layers", "all")  # "all" or number
+        unfreeze_layers = vit_config.get("unfreeze_layers_stage2", "all")  # "all" or number
         
         if unfreeze_layers == "all":
             model.unfreeze_encoder(num_layers=None)  # Unfreeze ALL layers
@@ -527,52 +531,47 @@ def train_progressive(model, train_epoch, valid_epoch, train_loader, valid_loade
         trainable_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
         print(f"After unfreezing - Trainable: {trainable_params:,} / {total_params:,} ({100*trainable_params/total_params:.1f}%)")
     
-    # Create new optimizer with lower learning rate
-    vit_config = get_config(train_config, "model", "vit_config")
 
-    fine_tune_lr = hyperparams['lr'] * get_config(vit_config, "fine_tune_lr_factor")
+    # Create Stage 2 optimizer with reduced learning rate
+    stage2_lr_factor = vit_config.get("stage2_lr_factor", 0.5)  # 50% of original LR
+    stage2_lr = hyperparams['lr'] * stage2_lr_factor
+    
     if hyperparams['optimizer_choice'] == 'adamw':
-        optimizer_ft = torch.optim.AdamW(
+        optimizer_stage2 = torch.optim.AdamW(
             filter(lambda p: p.requires_grad, model.parameters()),
-            lr=fine_tune_lr, weight_decay=1e-4
+            lr=stage2_lr, 
+            weight_decay=get_config(train_config, "training", "weight_decay", legacy_key="weight_decay")
         )
     else:
-        optimizer_ft = torch.optim.SGD(
+        optimizer_stage2 = torch.optim.SGD(
             filter(lambda p: p.requires_grad, model.parameters()),
-            lr=fine_tune_lr, momentum=0.9, weight_decay=1e-4
+            lr=stage2_lr, momentum=0.9, weight_decay=1e-4
         )
-    #scheduler for stage 2
-    scheduler_ft = torch.optim.lr_scheduler.ExponentialLR(
-    optimizer_ft,
-    gamma=get_config(train_config, "training", "lr_scheduler_gamma", legacy_key="lr_scheduler_gamma")
-    )
-
-    # Update hyperparams for stage 2
-    hyperparams_stage2 = hyperparams.copy()
-    hyperparams_stage2['lr'] = fine_tune_lr
     
-    # FIX: Recreate loss functions instead of accessing train_epoch attributes
+    scheduler_stage2 = torch.optim.lr_scheduler.ExponentialLR(
+        optimizer_stage2,
+        gamma=get_config(train_config, "training", "lr_scheduler_gamma", legacy_key="lr_scheduler_gamma")
+    )
+    
+    # Recreate loss functions and epoch runners for Stage 2
     CE_Loss, DICE_Loss, Focal_loss = create_loss_functions(
-        train_config, 
-        {'segmentation': hyperparams['segmentation']},
-        hyperparams['loss_combination'], 
-        hyperparams['weight_range'], 
-        path, 
-        device
+        train_config, {'segmentation': hyperparams['segmentation']},
+        hyperparams['loss_combination'], hyperparams['weight_range'], path, device
     )
     
-    # Create new epoch runners with recreated loss functions
-    train_epoch_ft, valid_epoch_ft = create_epoch_runners(
-        model, CE_Loss, DICE_Loss, Focal_loss,
-        hyperparams['lambdaa'], hyperparams['segmentation'], optimizer_ft, scheduler_ft, train_config, device
+    train_epoch_s2, valid_epoch_s2 = create_epoch_runners(
+        model, CE_Loss, DICE_Loss, Focal_loss, hyperparams['lambdaa'], 
+        hyperparams['segmentation'], optimizer_stage2, scheduler_stage2, train_config, device
     )
     
-    stage2_epochs = total_epochs - stage1_epochs
+    # Stage 2 hyperparams
+    hyperparams_s2 = hyperparams.copy()
+    hyperparams_s2['lr'] = stage2_lr
+    
     for epoch in range(stage2_epochs):
-        actual_epoch = stage1_epochs + epoch
-        current_iou, current_f1 = train_single_epoch(
-            model, train_epoch_ft, valid_epoch_ft, train_loader, valid_loader,
-            epoch, stage2_epochs, hyperparams_stage2
+        current_iou, current_f1= train_single_epoch(
+            model, train_epoch_s2, valid_epoch_s2, train_loader, valid_loader,
+            epoch, stage2_epochs, hyperparams_s2, "Stage2"
         )
         
         if current_iou > max_score:
@@ -580,13 +579,83 @@ def train_progressive(model, train_epoch, valid_epoch, train_loader, valid_loade
             best_f1 = current_f1
             best_model_state = model.state_dict()
             save_best_model(best_model_state, train_config, hyperparams['encoder'], hyperparams['segmentation'],
-                          hyperparams['lambdaa'], hyperparams['optimizer_choice'], fine_tune_lr,
+                          hyperparams['lambdaa'], hyperparams['optimizer_choice'], stage2_lr,
                           hyperparams['loss_combination'], hyperparams['weight_range'], hyperparams['sampler_option'],
-                          actual_epoch, current_iou, current_f1, path, "stage2")
+                          stage1_epochs + epoch, current_iou, current_f1, path, "stage2")
         
-        run_gradcam_visualization(model, train_config, valid_loader, valid_ids, path, device, actual_epoch, "stage2")
+        run_gradcam_visualization(model, train_config, valid_loader, valid_ids, path, device, stage1_epochs + epoch, "stage2")
     
+    # ===== STAGE 3: More encoder unfreezing =====
+    print(f"\n🎯 STAGE 3: Extended encoder unfreezing for {stage3_epochs} epochs...")
+    
+    # Unfreeze more layers in Stage 3
+    if hasattr(model, 'unfreeze_encoder'):
+        unfreeze_layers_stage3 = vit_config.get("unfreeze_layers_stage3", 8)  # More layers in Stage 3
+        model.unfreeze_encoder(num_layers=unfreeze_layers_stage3)
+        print(f"   Unfroze {unfreeze_layers_stage3} encoder layers total")
+        
+        # Debug parameter status
+        total_params = sum(p.numel() for p in model.parameters())
+        trainable_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
+        print(f"   Stage 3 - Trainable: {trainable_params:,} / {total_params:,} ({100*trainable_params/total_params:.1f}%)")
+    
+    # Create Stage 3 optimizer with even lower learning rate
+    stage3_lr_factor = vit_config.get("stage3_lr_factor", 0.2)  # 20% of original LR
+    stage3_lr = hyperparams['lr'] * stage3_lr_factor
+    
+    if hyperparams['optimizer_choice'] == 'adamw':
+        optimizer_stage3 = torch.optim.AdamW(
+            filter(lambda p: p.requires_grad, model.parameters()),
+            lr=stage3_lr, 
+            weight_decay=get_config(train_config, "training", "weight_decay", legacy_key="weight_decay") * 1.5  # Higher weight decay
+        )
+    else:
+        optimizer_stage3 = torch.optim.SGD(
+            filter(lambda p: p.requires_grad, model.parameters()),
+            lr=stage3_lr, momentum=0.9, weight_decay=1e-4
+        )
+    
+    scheduler_stage3 = torch.optim.lr_scheduler.ExponentialLR(
+        optimizer_stage3,
+        gamma=get_config(train_config, "training", "lr_scheduler_gamma", legacy_key="lr_scheduler_gamma")
+    )
+    
+    # Recreate epoch runners for Stage 3
+    train_epoch_s3, valid_epoch_s3 = create_epoch_runners(
+        model, CE_Loss, DICE_Loss, Focal_loss, hyperparams['lambdaa'], 
+        hyperparams['segmentation'], optimizer_stage3, scheduler_stage3, train_config, device
+    )
+    
+    # Stage 3 hyperparams
+    hyperparams_s3 = hyperparams.copy()
+    hyperparams_s3['lr'] = stage3_lr
+    
+    # Reset early stopping for Stage 3
+    consecutive_large_gaps = 0
+    max_allowed_gap_s3 = 0.08  # Very strict gap limit for Stage 3
+    
+    for epoch in range(stage3_epochs):
+        current_iou, current_f1= train_single_epoch(
+            model, train_epoch_s3, valid_epoch_s3, train_loader, valid_loader,
+            epoch, stage3_epochs, hyperparams_s3, "Stage3"
+        )
+        
+        if current_iou > max_score:
+            max_score = current_iou
+            best_f1 = current_f1
+            best_model_state = model.state_dict()
+            save_best_model(best_model_state, train_config, hyperparams['encoder'], hyperparams['segmentation'],
+                          hyperparams['lambdaa'], hyperparams['optimizer_choice'], stage3_lr,
+                          hyperparams['loss_combination'], hyperparams['weight_range'], hyperparams['sampler_option'],
+                          stage1_epochs + stage2_epochs + epoch, current_iou, current_f1, path, "stage3")
+        
+        run_gradcam_visualization(model, train_config, valid_loader, valid_ids, path, device, 
+                                stage1_epochs + stage2_epochs + epoch, "stage3")
+    
+    print(f"\n✅ 3-stage training completed! Best IoU: {max_score:.4f}, Best F1: {best_f1:.4f}")
+   
     return max_score, best_f1, best_model_state
+
 def train_standard(model, train_epoch, valid_epoch, train_loader, valid_loader, total_epochs, hyperparams, train_config, valid_ids, path, device):
     """Standard training for non-ViT models"""
     max_score = 0.0
@@ -596,7 +665,7 @@ def train_standard(model, train_epoch, valid_epoch, train_loader, valid_loader, 
     for epoch in range(total_epochs):
         current_iou, current_f1 = train_single_epoch(
             model, train_epoch, valid_epoch, train_loader, valid_loader,
-            epoch, total_epochs, hyperparams
+            epoch, total_epochs, hyperparams, stage= "Standard"
         )
         
         if current_iou > max_score:
@@ -609,7 +678,8 @@ def train_standard(model, train_epoch, valid_epoch, train_loader, valid_loader, 
                           epoch, current_iou, current_f1, path)
         
         run_gradcam_visualization(model, train_config, valid_loader, valid_ids, path, device, epoch)
-    
+
+
     return max_score, best_f1, best_model_state
 
 def train_once(train_config, preprocessing_config, train_ids, valid_ids, path, preprocessing_fn, detection_model, device,
