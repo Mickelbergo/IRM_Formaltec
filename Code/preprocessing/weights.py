@@ -8,9 +8,9 @@ import random
 import sys
 from tqdm import tqdm
 
-with open('New_Code/configs/training_config.json') as f:
+with open('Code/configs/training_config.json') as f:
     train_config = json.load(f)
-preprocess_path = train_config["preprocess_path"]
+preprocess_path = train_config["data"]["preprocess_path"]
 
 sys.path.append(preprocess_path)
 from Preprocessing import Dataset
@@ -145,18 +145,18 @@ def load_class_weights(save_path):
 
 
 # Load configurations
-with open('New_Code/configs/training_config.json') as f:
+with open('Code/configs/training_config.json') as f:
     train_config = json.load(f)
 
-with open('New_Code/configs/preprocessing_config.json') as f:
+with open('Code/configs/preprocessing_config.json') as f:
     preprocessing_config = json.load(f)
 
 DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
 print(DEVICE)
 
 # Set paths
-path = train_config["path"]
-model_version = train_config["model_version"]
+path = train_config["data"]["path"]
+model_version = train_config["model"]["version"]
 
 # Load all image and mask paths
 image_dir = os.path.join(path, "new_images_640_1280")

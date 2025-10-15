@@ -10,13 +10,13 @@
         "vit_config": {
             "model_name": "facebook/dinov2-giant",
             "target_layer": "decoder1.0",
-            "stage1_epochs": 20,
-            "stage2_epochs": 20,
-            "unfreeze_layers_stage2": 16,
-            "unfreeze_layers_stage3": 32,
-            "stage2_lr_factor": 0.5,
-            "stage3_lr_factor": 0.1,
-            "dropout_rate": 0.2
+            "stage1_epochs": 30,
+            "stage2_epochs": 30,
+            "unfreeze_layers_stage2": 8,
+            "unfreeze_layers_stage3": 16,
+            "stage2_lr_factor": 0.3,
+            "stage3_lr_factor": 0.05,
+            "dropout_rate": 0.5
         },
         "encoder_weights": "noisy-student-475",
         "activation": null,
@@ -25,15 +25,15 @@
     },
     "training": {
         "batch_size": 8,
-        "num_epochs": 70,
-        "weight_decay": 1e-4,
+        "num_epochs": 100,
+        "weight_decay": 1e-5,
         "save_intermediate_models": true,
         "split_ratio": 0.8,
         "metrics": ["accuracy", "iou_score"],
         "sampler": false,
         "grad_clip_value": 0.1,
         "display_image": false,
-        "num_workers": 10,
+        "num_workers": 1,
         "mixed_precision": true,
         "use_diffusion_images": false,
         "valid_extensions": [".jpg", ".jpeg", ".png", ".bmp", ".tiff"],
@@ -47,22 +47,30 @@
             "gamma": 4.0,
             "reduction": "mean"
         },
+        "scheduler_type": "cosine_restarts", 
+        "cosine_restart_config": {
+            "T_0": 15,          
+            "T_mult": 1,
+            "eta_min": 1e-7,  
+            "last_epoch": -1
+        },
+        "random_split": true,
         "progressive_training": true,
-        "grid_search_enabled": true,
+        "grid_search_enabled": false,
         "non_grid_search": {
             "use_focal_loss": false,
-            "learning_rate": 0.0001,
+            "learning_rate": 0.0002,
             "optimizer": "adamw",
             "lr_scheduler_gamma": 0.999,
-            "weight_range_multiclass": [10,50],
+            "weight_range_multiclass": [30,60],
             "loss_functions": ["dice"],
-            "lambda_loss": 12
+            "lambda_loss": 10
 
         },
         "grid_search_parameters": {
-            "learning_rate": [0.0001, 0.00001,0.000005],
+            "learning_rate": [0.00001, 0.0001,0.000005],
             "optimizer": ["adamw"],
-            "lr_scheduler_gamma": [0.999,  0.99990, 0.99],
+            "lr_scheduler_gamma": [0.999,  0.9999, 0.99],
             "use_focal_loss": [false],
             "loss_functions": ["dice"],
             "lambda_loss": [12, 20,10,15]

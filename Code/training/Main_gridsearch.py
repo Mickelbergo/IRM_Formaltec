@@ -185,11 +185,24 @@ def create_optimizer_and_scheduler(model, optimizer_choice, lr, train_config, gr
     else:
         raise ValueError("Supported optimizers: 'adamw', 'sgd'")
     
-    scheduler = torch.optim.lr_scheduler.ExponentialLR(
-        optimizer,
-        gamma=get_config(train_config, "training", "non_grid_search", "lr_scheduler_gamma", legacy_key="lr_scheduler_gamma")
-        if not grid_search else get_config(train_config, "training", "lr_scheduler_gamma", legacy_key="lr_scheduler_gamma")
-    )
+    # ADD COSINE ANNEALING OPTION
+    scheduler_type = get_config(train_config, "training", "scheduler_type", legacy_key="scheduler_type")
+    
+    if scheduler_type == "cosine_restarts":
+        cosine_config = get_config(train_config, "training", "cosine_restart_config") or {}
+        scheduler = torch.optim.lr_scheduler.CosineAnnealingWarmRestarts(
+            optimizer,
+            T_0=cosine_config.get("T_0", 15),
+            T_mult=cosine_config.get("T_mult", 1),
+            eta_min=cosine_config.get("eta_min", 1e-7)
+        )
+    else:
+        # Original exponential scheduler
+        scheduler = torch.optim.lr_scheduler.ExponentialLR(
+            optimizer,
+            gamma=get_config(train_config, "training", "non_grid_search", "lr_scheduler_gamma", legacy_key="lr_scheduler_gamma")
+            if not grid_search else get_config(train_config, "training", "lr_scheduler_gamma", legacy_key="lr_scheduler_gamma")
+        )
     
     return optimizer, scheduler
 
@@ -265,7 +278,7 @@ def create_data_loaders(train_dataset, valid_dataset, train_config, preprocessin
 class TrainingController:
     def __init__(self, train_config):
         self.display_image = get_config(train_config, "training", "display_image", legacy_key="display_image")
-        self.save_models = get_config(train_config, "training", "save_models", legacy_key="save_models")
+        self.save_models = get_config(train_config, "training", "save_intermediate_models", legacy_key="save_models")
         self.run_gradcam = get_config(train_config, "training", "gradCAM", legacy_key="gradCAM")
         
     def toggle_display(self):
@@ -759,13 +772,24 @@ def train_once(train_config, preprocessing_config, train_ids, valid_ids, path, p
     return max_score, best_f1, best_model_state
 
 def setup_data_splits(train_config, path):
-    """Setup train/validation data splits"""
+    """Setup train/validation data splits with optional randomness"""
     image_dir = os.path.join(path, "new_images_640_1280")
     valid_extensions = tuple(get_config(train_config, "training", "valid_extensions", legacy_key="valid_extensions"))
     image_ids = sorted([f for f in os.listdir(image_dir) if f.lower().endswith(valid_extensions)])
 
-    # Shuffle and split
-    random.seed(get_config(train_config, "training", "random_seed", legacy_key="random_seed"))
+    # ADD RANDOMNESS: Use current time if random_split enabled
+    base_seed = get_config(train_config, "training", "random_seed", legacy_key="random_seed")
+    use_random_split = get_config(train_config, "training", "random_split", legacy_key="random_split")
+    
+    if use_random_split:
+        import time
+        actual_seed = int(time.time() * 1000) % 100000  # Different seed each run
+        print(f"🎲 Using random split with seed: {actual_seed}")
+    else:
+        actual_seed = base_seed
+        print(f"🔒 Using fixed split with seed: {actual_seed}")
+    
+    random.seed(actual_seed)
     random.shuffle(image_ids)
 
     split_ratio = get_config(train_config, "training", "split_ratio", legacy_key="split_ratio")
@@ -787,6 +811,7 @@ def setup_data_splits(train_config, path):
             train_ids.extend(gen_images)
 
     return train_ids, valid_ids, originals_fnames
+
 
 def run_grid_search(train_config, preprocessing_config, train_ids, valid_ids, path, preprocessing_fn, detection_model, device, originals_fnames):
     """Run grid search over hyperparameters"""

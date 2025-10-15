@@ -88,7 +88,7 @@ python New_Code/training/prediction.py
 | 6   | skin abrasion            | hautabschürfung            |
 | 7   | puncture-gun shot        | punktförmige-gewalt-schuss |
 | 8   | contused-lacerated       | quetsch-riss Wunden        |
-| 9   | semisharp force          | Halbscharfe Gewalt         |
+| 9   | semisharp force          | Halbscharfe Gewalt         | -> keine klare definiton
 | 10  | lacerations              | risswunden                 |
 
 **Removed classes**: 11–14 (merged into class 6)
