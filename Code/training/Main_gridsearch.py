@@ -11,6 +11,7 @@ from Preprocessing import Dataset
 from Epochs import TrainEpoch, ValidEpoch
 from model import UNetWithClassification, UNetWithSwinTransformer, UNetWithViT
 from segmentation_models_pytorch.encoders import get_preprocessing_fn
+from training_logger import TrainingLogger
 import ssl
 import numpy as np
 from ultralytics import YOLO
@@ -26,6 +27,9 @@ import threading
 
 
 ssl._create_default_https_context = ssl._create_unverified_context
+
+# Global logger instance
+training_logger = None
 
 
 def get_config(cfg, *keys, legacy_key=None):
@@ -102,7 +106,7 @@ def get_vit_target_layer(train_config):
 def create_model(train_config):
     """Create and return the appropriate model based on configuration"""
     encoder = get_config(train_config, "model", "encoder", legacy_key="encoder")
-    
+
     if encoder == "transformer":
         model = UNetWithSwinTransformer(
             classes=get_config(train_config, "model", "segmentation_classes", legacy_key="segmentation_classes"),
@@ -117,7 +121,7 @@ def create_model(train_config):
             dropout_rate=get_config(train_config, "model", "vit_config", "dropout_rate", legacy_key="dropout_rate")
         )
         use_progressive = True
-        
+
         # ADD DEBUG SECTION
         print("=== Model Parameter Status After Creation ===")
         total_params = sum(p.numel() for p in model.parameters())
@@ -126,11 +130,15 @@ def create_model(train_config):
         print(f"Total params: {total_params:,}")
         print(f"Trainable params: {trainable_params:,} ({100*trainable_params/total_params:.1f}%)")
         print(f"Frozen params: {frozen_params:,} ({100*frozen_params/total_params:.1f}%)")
-        
+
         if trainable_params == total_params:
             print("⚠️  WARNING: All parameters are trainable! Encoder is NOT frozen!")
         else:
             print("✅ Encoder is properly frozen")
+
+        # Log model info to training logger
+        if training_logger:
+            training_logger.log_model_info(model, encoder, total_params, trainable_params)
     else:
         model = UNetWithClassification(
             encoder_name=encoder,
@@ -139,7 +147,7 @@ def create_model(train_config):
             activation=None
         )
         use_progressive = False
-    
+
     return model, use_progressive
 
 def create_datasets(train_config, preprocessing_config, train_ids, valid_ids, path, preprocessing_fn, detection_model, device):
@@ -481,7 +489,11 @@ def train_single_epoch(model, train_epoch, valid_epoch, train_loader, valid_load
     print(f"Epoch {epoch + 1}/{total_epochs}{stage_str}  (lambda={hyperparams['lambdaa']}, sampler={hyperparams['sampler_option']}, "
           f"weights={hyperparams['weight_range']}, loss_combo={hyperparams['loss_combination']}, "
           f"lr={hyperparams['lr']}, opt={hyperparams['optimizer_choice']})")
-    
+
+    # Log epoch start to training logger
+    if training_logger:
+        training_logger.log_epoch_start(epoch, stage if stage else "Standard")
+
     train_logs = train_epoch.run(train_loader)
     valid_logs = valid_epoch.run(valid_loader)
 
@@ -494,11 +506,32 @@ def train_single_epoch(model, train_epoch, valid_epoch, train_loader, valid_load
     print(f"Train IoU: {train_logs['iou_score']:.4f}, Valid IoU: {current_iou:.4f}")
     print(f"Valid F1: {current_f1:.4f}")
 
+    # Log metrics to training logger
+    if training_logger:
+        training_logger.log_metrics(
+            'train',
+            train_logs['loss'],
+            train_logs['accuracy'],
+            train_logs['iou_score'],
+            train_logs['f1_score'],
+            lr=train_logs.get('lr', None),
+            per_class_iou=train_logs.get('per_class_iou', None)
+        )
+
+        training_logger.log_metrics(
+            'valid',
+            valid_logs['loss'],
+            valid_logs['accuracy'],
+            valid_logs['iou_score'],
+            valid_logs['f1_score'],
+            per_class_iou=valid_logs.get('per_class_iou', None)
+        )
+
     return current_iou, current_f1
 def train_progressive(model, train_epoch, valid_epoch, train_loader, valid_loader, total_epochs, hyperparams, train_config, valid_ids, path, device):
     """Progressive training for ViT models"""
     print("Starting progressive training for ViT model...")
-    
+
     max_score = 0.0
     best_f1 = 0.0
     best_model_state = None
@@ -507,11 +540,15 @@ def train_progressive(model, train_epoch, valid_epoch, train_loader, valid_loade
 
     # Define stage epochs
     stage1_epochs = vit_config.get("stage1_epochs", 40)  # Default 40 epochs for Stage 1
-    stage2_epochs = vit_config.get("stage2_epochs", 30)  # Default 30 epochs for Stage 2  
+    stage2_epochs = vit_config.get("stage2_epochs", 30)  # Default 30 epochs for Stage 2
     stage3_epochs = total_epochs - stage1_epochs - stage2_epochs  # Remaining epochs for Stage 3
-    
+
     # Stage 1: Frozen encoder
     print(f"Stage 1: Training with frozen encoder for {stage1_epochs} epochs...")
+
+    # Log stage change
+    if training_logger:
+        training_logger.log_stage_change("Stage 1 - Frozen Encoder", unfrozen_layers=0)
     for epoch in range(stage1_epochs):
         current_iou, current_f1 = train_single_epoch(
             model, train_epoch, valid_epoch, train_loader, valid_loader, 
@@ -532,20 +569,27 @@ def train_progressive(model, train_epoch, valid_epoch, train_loader, valid_loade
     
     # Stage 2: Unfreeze encoder
     print("Stage 2: Unfreezing encoder for full model fine-tuning...")
+    unfreeze_layers_s2 = None
     if hasattr(model, 'unfreeze_encoder'):
         # CHANGE THIS LINE - add configuration option
         vit_config = get_config(train_config, "model", "vit_config") or {}
         unfreeze_layers = vit_config.get("unfreeze_layers_stage2", "all")  # "all" or number
-        
+
         if unfreeze_layers == "all":
             model.unfreeze_encoder(num_layers=None)  # Unfreeze ALL layers
+            unfreeze_layers_s2 = "all"
         else:
             model.unfreeze_encoder(num_layers=int(unfreeze_layers))  # Unfreeze specific number
-        
+            unfreeze_layers_s2 = int(unfreeze_layers)
+
         print("=== Model Parameter Status After Unfreezing ===")
         total_params = sum(p.numel() for p in model.parameters())
         trainable_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
         print(f"After unfreezing - Trainable: {trainable_params:,} / {total_params:,} ({100*trainable_params/total_params:.1f}%)")
+
+    # Log stage change
+    if training_logger:
+        training_logger.log_stage_change("Stage 2 - Partial Unfreeze", unfrozen_layers=unfreeze_layers_s2)
     
 
     # Create Stage 2 optimizer with reduced learning rate
@@ -603,17 +647,23 @@ def train_progressive(model, train_epoch, valid_epoch, train_loader, valid_loade
     
     # ===== STAGE 3: More encoder unfreezing =====
     print(f"\n🎯 STAGE 3: Extended encoder unfreezing for {stage3_epochs} epochs...")
-    
+
     # Unfreeze more layers in Stage 3
+    unfreeze_layers_s3 = None
     if hasattr(model, 'unfreeze_encoder'):
         unfreeze_layers_stage3 = vit_config.get("unfreeze_layers_stage3", 8)  # More layers in Stage 3
         model.unfreeze_encoder(num_layers=unfreeze_layers_stage3)
         print(f"   Unfroze {unfreeze_layers_stage3} encoder layers total")
-        
+        unfreeze_layers_s3 = unfreeze_layers_stage3
+
         # Debug parameter status
         total_params = sum(p.numel() for p in model.parameters())
         trainable_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
         print(f"   Stage 3 - Trainable: {trainable_params:,} / {total_params:,} ({100*trainable_params/total_params:.1f}%)")
+
+    # Log stage change
+    if training_logger:
+        training_logger.log_stage_change("Stage 3 - Extended Unfreeze", unfrozen_layers=unfreeze_layers_s3)
     
     # Create Stage 3 optimizer with even lower learning rate
     stage3_lr_factor = vit_config.get("stage3_lr_factor", 0.2)  # 20% of original LR
@@ -906,6 +956,30 @@ def main():
     with open('Code/configs/preprocessing_config.json') as f:
         preprocessing_config = json.load(f)
 
+    # Initialize training logger
+    global training_logger
+    from datetime import datetime
+    encoder = get_config(train_config, 'model', 'encoder', legacy_key='encoder')
+    run_name = f"{encoder}_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+    training_logger = TrainingLogger(run_name=run_name)
+
+    # Log hyperparameters
+    hyperparams_log = {
+        'encoder': encoder,
+        'model_version': get_config(train_config, 'model', 'version'),
+        'learning_rate': get_config(train_config, 'training', 'non_grid_search', 'learning_rate'),
+        'lambda': get_config(train_config, 'training', 'non_grid_search', 'lambda_loss'),
+        'weight_range': get_config(train_config, 'training', 'non_grid_search', 'weight_range_multiclass'),
+        'batch_size': get_config(train_config, 'training', 'batch_size'),
+        'num_epochs': get_config(train_config, 'training', 'num_epochs'),
+        'scheduler_type': get_config(train_config, 'training', 'scheduler_type'),
+        'optimizer': get_config(train_config, 'training', 'non_grid_search', 'optimizer'),
+        'loss_functions': get_config(train_config, 'training', 'non_grid_search', 'loss_functions'),
+        'segmentation_mode': preprocessing_config.get('segmentation'),
+        'num_classes': get_config(train_config, 'model', 'segmentation_classes')
+    }
+    training_logger.log_hyperparameters(hyperparams_log)
+
     # Setup training controller and keyboard controls
     global training_controller
     training_controller = TrainingController(train_config)
@@ -957,6 +1031,21 @@ def main():
         final_filename = f"final_model_{best_iou:.4f}_{best_f1:.4f}.pth"
         torch.save(best_model_state, os.path.join(path, final_filename))
         print(f"Final best model saved as {final_filename}!")
+
+    # Finalize training logger
+    if training_logger:
+        summary = training_logger.finalize()
+        print(f"\n{'='*60}")
+        print(f"📊 Training Complete!")
+        print(f"{'='*60}")
+        print(f"Best Valid IoU:  {summary['best_valid_iou']:.4f}")
+        print(f"Best Valid F1:   {summary['best_valid_f1']:.4f}")
+        print(f"Total Epochs:    {summary['total_epochs']}")
+        print(f"Logs saved to:   {training_logger.run_dir}")
+        print(f"{'='*60}")
+        print(f"\n🎨 Launch dashboard to visualize:")
+        print(f"   streamlit run Code/training/dashboard.py")
+        print(f"{'='*60}\n")
 
 if __name__ == "__main__":
     main()

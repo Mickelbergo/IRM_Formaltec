@@ -140,6 +140,9 @@ class Epoch:
         mean_per_class_iou = np.mean(np.stack(per_class_ious), axis=0)  # Average over all batches
         print(f'Per-class IoU: {mean_per_class_iou}')
 
+        # Add per-class IoU to logs for dashboard
+        logs['per_class_iou'] = mean_per_class_iou
+
         #print(f'Class Distribution: {self.compute_class_distribution(predicted_classes)}')
 
 
