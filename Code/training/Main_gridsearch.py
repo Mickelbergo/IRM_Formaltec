@@ -228,10 +228,14 @@ def create_loss_functions(train_config, preprocessing_config, loss_combination, 
     focal_loss_flag = loss_combination == 'focal+ce'
     dice_loss_flag = loss_combination == "dice+ce"
 
+    # Label smoothing reduces overfitting by softening hard labels
+    # Default value of 0.1 is standard in literature (Szegedy et al., 2016)
+    label_smoothing = get_config(train_config, "training", "label_smoothing", legacy_key="label_smoothing") or 0.1
+
     if preprocessing_config["segmentation"] == "binary":
-        CE_Loss = nn.CrossEntropyLoss(weight=class_weights_binary)
+        CE_Loss = nn.CrossEntropyLoss(weight=class_weights_binary, label_smoothing=label_smoothing)
     else:
-        CE_Loss = nn.CrossEntropyLoss(weight=class_weights_multiclass)
+        CE_Loss = nn.CrossEntropyLoss(weight=class_weights_multiclass, label_smoothing=label_smoothing)
 
     DICE_Loss = smp.losses.DiceLoss(mode="multiclass") if dice_loss_flag else None
 
@@ -532,6 +536,21 @@ def train_single_epoch(model, train_epoch, valid_epoch, train_loader, valid_load
         )
 
     return current_iou, current_f1
+
+def evaluate_ema_model(ema_model, valid_epoch, valid_loader):
+    """Evaluate EMA model on validation set"""
+    # Temporarily switch to EMA model
+    original_model = valid_epoch.model
+    valid_epoch.model = ema_model.model
+
+    # Run validation
+    valid_logs = valid_epoch.run(valid_loader)
+
+    # Restore original model
+    valid_epoch.model = original_model
+
+    return valid_logs['iou_score'], valid_logs.get('f1_score', 0.0)
+
 def train_progressive(model, train_epoch, valid_epoch, train_loader, valid_loader, total_epochs, hyperparams, train_config, valid_ids, path, device):
     """Progressive training for ViT models"""
     print("Starting progressive training for ViT model...")
@@ -539,8 +558,19 @@ def train_progressive(model, train_epoch, valid_epoch, train_loader, valid_loade
     max_score = 0.0
     best_f1 = 0.0
     best_model_state = None
+    max_score_ema = 0.0
+    best_f1_ema = 0.0
+    best_ema_state = None
 
     vit_config = get_config(train_config, "model", "vit_config")
+
+    # Initialize EMA if enabled
+    ema_model = None
+    use_ema = vit_config.get("use_ema", False)
+    if use_ema:
+        ema_decay = vit_config.get("ema_decay", 0.9999)
+        ema_model = ModelEMA(model, decay=ema_decay, device=device)
+        print(f"🔄 EMA enabled with decay={ema_decay}")
 
     # Define stage epochs
     stage1_epochs = vit_config.get("stage1_epochs", 40)  # Default 40 epochs for Stage 1

@@ -1,0 +1,19 @@
+{
+    "encoder": "vit",
+    "model_version": "v1.6",
+    "learning_rate": 0.0002,
+    "lambda": 10,
+    "weight_range": [
+        30,
+        60
+    ],
+    "batch_size": 8,
+    "num_epochs": 100,
+    "scheduler_type": "exponential",
+    "optimizer": "adamw",
+    "loss_functions": [
+        "dice"
+    ],
+    "segmentation_mode": "multiclass",
+    "num_classes": 11
+}

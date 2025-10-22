@@ -61,6 +61,7 @@
         "random_split": true,
         "progressive_training": true,
         "grid_search_enabled": false,
+        "label_smoothing": 0.1,
         "non_grid_search": {
             "use_focal_loss": false,
             "learning_rate": 0.0002,
