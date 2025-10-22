@@ -89,22 +89,28 @@ class UNetWithViT(nn.Module):
     - Multi-scale feature extraction
     - Robust to domain shifts
     """
-    def __init__(self, classes=2, activation=None, model_name="facebook/dinov2-base", dropout_rate=0.3):
+    def __init__(self, classes=2, activation=None, model_name="facebook/dinov2-base", dropout_rate=0.3, stochastic_depth_rate=0.1):
         super(UNetWithViT, self).__init__()
-        
+
         # Available DINOv2 models (choose based on computational budget):
         # "facebook/dinov2-small" - 22M params, 384 dim
-        # "facebook/dinov2-base" - 86M params, 768 dim  
+        # "facebook/dinov2-base" - 86M params, 768 dim
         # "facebook/dinov2-large" - 300M params, 1024 dim
         # "facebook/dinov2-giant" - 1.1B params, 1536 dim (best performance)
-        
+
         self.model_name = model_name
         self.dropout_rate = dropout_rate
-        
+        self.stochastic_depth_rate = stochastic_depth_rate
+
         # Load pre-trained DINOv2 model
         print(f"Loading {model_name}...")
-        self.vit_encoder = AutoModel.from_pretrained(model_name)
-        self.config = AutoConfig.from_pretrained(model_name)
+        config = AutoConfig.from_pretrained(model_name)
+        # Enable stochastic depth (DropPath) in encoder
+        if stochastic_depth_rate > 0:
+            config.drop_path_rate = stochastic_depth_rate
+            print(f"Stochastic Depth enabled: drop_path_rate={stochastic_depth_rate}")
+        self.vit_encoder = AutoModel.from_pretrained(model_name, config=config)
+        self.config = config
         
         # Get model dimensions
         self.hidden_size = self.config.hidden_size  # 768 for base, 1024 for large, etc.

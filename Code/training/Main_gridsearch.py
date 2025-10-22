@@ -12,6 +12,7 @@ from Epochs import TrainEpoch, ValidEpoch
 from model import UNetWithClassification, UNetWithSwinTransformer, UNetWithViT
 from segmentation_models_pytorch.encoders import get_preprocessing_fn
 from training_logger import TrainingLogger
+from ema import ModelEMA
 import ssl
 import numpy as np
 from ultralytics import YOLO
@@ -118,7 +119,8 @@ def create_model(train_config):
             classes=get_config(train_config, "model", "segmentation_classes", legacy_key="segmentation_classes"),
             activation=get_config(train_config, "model", "activation", legacy_key="activation"),
             model_name=get_vit_model_name(train_config),
-            dropout_rate=get_config(train_config, "model", "vit_config", "dropout_rate", legacy_key="dropout_rate")
+            dropout_rate=get_config(train_config, "model", "vit_config", "dropout_rate", legacy_key="dropout_rate"),
+            stochastic_depth_rate=get_config(train_config, "model", "vit_config", "stochastic_depth_rate", legacy_key="stochastic_depth_rate") or 0.1
         )
         use_progressive = True
 
@@ -437,7 +439,9 @@ def run_gradcam_visualization(model, train_config, valid_loader, valid_ids, path
             gradcam_model = UNetWithViT(
                 classes=get_config(train_config, "model", "segmentation_classes", legacy_key="segmentation_classes"),
                 activation=get_config(train_config, "model", "activation", legacy_key="activation"),
-                model_name=get_vit_model_name(train_config)
+                model_name=get_vit_model_name(train_config),
+                dropout_rate=get_config(train_config, "model", "vit_config", "dropout_rate", legacy_key="dropout_rate"),
+                stochastic_depth_rate=get_config(train_config, "model", "vit_config", "stochastic_depth_rate", legacy_key="stochastic_depth_rate") or 0.1
             )
         else:
             # Standard segmentation models (efficientnet, resnet, etc.)
@@ -627,22 +631,33 @@ def train_progressive(model, train_epoch, valid_epoch, train_loader, valid_loade
     # Stage 2 hyperparams
     hyperparams_s2 = hyperparams.copy()
     hyperparams_s2['lr'] = stage2_lr
-    
+
+    # Early stopping for Stage 2
+    patience = vit_config.get("early_stopping_patience", 15)
+    epochs_without_improvement = 0
+
     for epoch in range(stage2_epochs):
         current_iou, current_f1= train_single_epoch(
             model, train_epoch_s2, valid_epoch_s2, train_loader, valid_loader,
             epoch, stage2_epochs, hyperparams_s2, "Stage2"
         )
-        
+
         if current_iou > max_score:
             max_score = current_iou
             best_f1 = current_f1
             best_model_state = model.state_dict()
+            epochs_without_improvement = 0  # Reset counter
             save_best_model(best_model_state, train_config, hyperparams['encoder'], hyperparams['segmentation'],
                           hyperparams['lambdaa'], hyperparams['optimizer_choice'], stage2_lr,
                           hyperparams['loss_combination'], hyperparams['weight_range'], hyperparams['sampler_option'],
                           stage1_epochs + epoch, current_iou, current_f1, path, "stage2")
-        
+        else:
+            epochs_without_improvement += 1
+            if epochs_without_improvement >= patience:
+                print(f"\nEarly stopping triggered in Stage 2 after {epoch+1} epochs (patience={patience})")
+                print(f"Best validation IoU: {max_score:.4f}")
+                break
+
         run_gradcam_visualization(model, train_config, valid_loader, valid_ids, path, device, stage1_epochs + epoch, "stage2")
     
     # ===== STAGE 3: More encoder unfreezing =====
@@ -695,27 +710,33 @@ def train_progressive(model, train_epoch, valid_epoch, train_loader, valid_loade
     # Stage 3 hyperparams
     hyperparams_s3 = hyperparams.copy()
     hyperparams_s3['lr'] = stage3_lr
-    
-    # Reset early stopping for Stage 3
-    consecutive_large_gaps = 0
-    max_allowed_gap_s3 = 0.08  # Very strict gap limit for Stage 3
-    
+
+    # Early stopping for Stage 3
+    epochs_without_improvement_s3 = 0
+
     for epoch in range(stage3_epochs):
         current_iou, current_f1= train_single_epoch(
             model, train_epoch_s3, valid_epoch_s3, train_loader, valid_loader,
             epoch, stage3_epochs, hyperparams_s3, "Stage3"
         )
-        
+
         if current_iou > max_score:
             max_score = current_iou
             best_f1 = current_f1
             best_model_state = model.state_dict()
+            epochs_without_improvement_s3 = 0  # Reset counter
             save_best_model(best_model_state, train_config, hyperparams['encoder'], hyperparams['segmentation'],
                           hyperparams['lambdaa'], hyperparams['optimizer_choice'], stage3_lr,
                           hyperparams['loss_combination'], hyperparams['weight_range'], hyperparams['sampler_option'],
                           stage1_epochs + stage2_epochs + epoch, current_iou, current_f1, path, "stage3")
-        
-        run_gradcam_visualization(model, train_config, valid_loader, valid_ids, path, device, 
+        else:
+            epochs_without_improvement_s3 += 1
+            if epochs_without_improvement_s3 >= patience:
+                print(f"\nEarly stopping triggered in Stage 3 after {epoch+1} epochs (patience={patience})")
+                print(f"Best validation IoU: {max_score:.4f}")
+                break
+
+        run_gradcam_visualization(model, train_config, valid_loader, valid_ids, path, device,
                                 stage1_epochs + stage2_epochs + epoch, "stage3")
     
     print(f"\n✅ 3-stage training completed! Best IoU: {max_score:.4f}, Best F1: {best_f1:.4f}")
