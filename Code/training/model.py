@@ -110,24 +110,15 @@ class UNetWithViT(nn.Module):
         self.hidden_size = self.config.hidden_size  # 768 for base, 1024 for large, etc.
         self.patch_size = self.config.patch_size    # Usually 14
         
-        self.freeze_encoder()  # ADD THIS LINE - it's missing!
-        
+        # Freeze encoder initially - all parameters frozen for Stage 1 training
+        self.freeze_encoder()
+
         # Print parameter counts for verification
         total_params = sum(p.numel() for p in self.parameters())
         trainable_params = sum(p.numel() for p in self.parameters() if p.requires_grad)
         print(f"Total params: {total_params:,}")
         print(f"Trainable params: {trainable_params:,}")
         print(f"Frozen params: {total_params - trainable_params:,}")
-    
-        # Freeze encoder initially (can unfreeze for fine-tuning)
-        for param in self.vit_encoder.parameters():
-            param.requires_grad = False
-            
-        # Unfreeze last few layers for fine-tuning
-        if hasattr(self.vit_encoder, 'encoder'):
-            for layer in self.vit_encoder.encoder.layer[-2:]:  # Last 2 layers
-                for param in layer.parameters():
-                    param.requires_grad = True
         
         # Feature projection layers for multi-scale features
         # We'll extract features from multiple transformer blocks

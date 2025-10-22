@@ -47,7 +47,7 @@
             "gamma": 4.0,
             "reduction": "mean"
         },
-        "scheduler_type": "cosine_restarts", 
+        "scheduler_type": "exponential", 
         "cosine_restart_config": {
             "T_0": 15,          
             "T_mult": 1,

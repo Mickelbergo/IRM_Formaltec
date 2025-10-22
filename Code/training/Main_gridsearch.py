@@ -184,10 +184,10 @@ def create_optimizer_and_scheduler(model, optimizer_choice, lr, train_config, gr
         optimizer = torch.optim.SGD(model.parameters(), lr=lr, momentum=0.9, weight_decay=1e-4)
     else:
         raise ValueError("Supported optimizers: 'adamw', 'sgd'")
-    
+
     # ADD COSINE ANNEALING OPTION
     scheduler_type = get_config(train_config, "training", "scheduler_type", legacy_key="scheduler_type")
-    
+
     if scheduler_type == "cosine_restarts":
         cosine_config = get_config(train_config, "training", "cosine_restart_config") or {}
         scheduler = torch.optim.lr_scheduler.CosineAnnealingWarmRestarts(
@@ -198,13 +198,14 @@ def create_optimizer_and_scheduler(model, optimizer_choice, lr, train_config, gr
         )
     else:
         # Original exponential scheduler
+        scheduler_type = 'exponential'
         scheduler = torch.optim.lr_scheduler.ExponentialLR(
             optimizer,
             gamma=get_config(train_config, "training", "non_grid_search", "lr_scheduler_gamma", legacy_key="lr_scheduler_gamma")
             if not grid_search else get_config(train_config, "training", "lr_scheduler_gamma", legacy_key="lr_scheduler_gamma")
         )
-    
-    return optimizer, scheduler
+
+    return optimizer, scheduler, scheduler_type
 
 def create_loss_functions(train_config, preprocessing_config, loss_combination, weight_range, path, device):
     """Create and return loss functions"""
@@ -330,25 +331,27 @@ def setup_keyboard_controls():
     
     signal.signal(signal.SIGINT, signal_handler)
 
-def create_epoch_runners(model, CE_Loss, DICE_Loss, Focal_loss, lambdaa, segmentation, optimizer, scheduler, train_config, device):
+def create_epoch_runners(model, CE_Loss, DICE_Loss, Focal_loss, lambdaa, segmentation, optimizer, scheduler, train_config, device, scheduler_type='exponential'):
     """Create train and validation epoch runners"""
     train_epoch = TrainEpoch(
         model, CE_Loss, DICE_Loss, Focal_loss, lambdaa, segmentation, optimizer, device=device,
         grad_clip_value=get_config(train_config, "training", "grad_clip_value", legacy_key="grad_clip_value"),
-        display_image=training_controller.display_image, 
-        nr_classes=get_config(train_config, "model", "segmentation_classes", legacy_key="segmentation_classes"), 
-        scheduler=scheduler, 
-        mixed_prec=get_config(train_config, "training", "mixed_precision", legacy_key="mixed_precision")
+        display_image=training_controller.display_image,
+        nr_classes=get_config(train_config, "model", "segmentation_classes", legacy_key="segmentation_classes"),
+        scheduler=scheduler,
+        mixed_prec=get_config(train_config, "training", "mixed_precision", legacy_key="mixed_precision"),
+        scheduler_type=scheduler_type
     )
-    
+
     valid_epoch = ValidEpoch(
         model, CE_Loss, DICE_Loss, Focal_loss, lambdaa, segmentation, device=device,
-        display_image=training_controller.display_image, 
-        nr_classes=get_config(train_config, "model", "segmentation_classes", legacy_key="segmentation_classes"), 
-        scheduler=scheduler, 
-        mixed_prec=get_config(train_config, "training", "mixed_precision", legacy_key="mixed_precision")
+        display_image=training_controller.display_image,
+        nr_classes=get_config(train_config, "model", "segmentation_classes", legacy_key="segmentation_classes"),
+        scheduler=scheduler,
+        mixed_prec=get_config(train_config, "training", "mixed_precision", legacy_key="mixed_precision"),
+        scheduler_type=scheduler_type
     )
-    
+
     return train_epoch, valid_epoch
 
 def save_best_model(model_state, train_config, encoder, segmentation, lambdaa, optimizer_choice, lr, loss_combination, weight_range, sampler_option, epoch, iou, f1, path, stage=""):
@@ -573,8 +576,8 @@ def train_progressive(model, train_epoch, valid_epoch, train_loader, valid_loade
     )
     
     train_epoch_s2, valid_epoch_s2 = create_epoch_runners(
-        model, CE_Loss, DICE_Loss, Focal_loss, hyperparams['lambdaa'], 
-        hyperparams['segmentation'], optimizer_stage2, scheduler_stage2, train_config, device
+        model, CE_Loss, DICE_Loss, Focal_loss, hyperparams['lambdaa'],
+        hyperparams['segmentation'], optimizer_stage2, scheduler_stage2, train_config, device, 'exponential'
     )
     
     # Stage 2 hyperparams
@@ -635,8 +638,8 @@ def train_progressive(model, train_epoch, valid_epoch, train_loader, valid_loade
     
     # Recreate epoch runners for Stage 3
     train_epoch_s3, valid_epoch_s3 = create_epoch_runners(
-        model, CE_Loss, DICE_Loss, Focal_loss, hyperparams['lambdaa'], 
-        hyperparams['segmentation'], optimizer_stage3, scheduler_stage3, train_config, device
+        model, CE_Loss, DICE_Loss, Focal_loss, hyperparams['lambdaa'],
+        hyperparams['segmentation'], optimizer_stage3, scheduler_stage3, train_config, device, 'exponential'
     )
     
     # Stage 3 hyperparams
@@ -722,25 +725,25 @@ def train_once(train_config, preprocessing_config, train_ids, valid_ids, path, p
     )
     
     # Create optimizer and scheduler
-    optimizer, scheduler = create_optimizer_and_scheduler(model, optimizer_choice, lr, train_config, grid_search)
-    
+    optimizer, scheduler, scheduler_type = create_optimizer_and_scheduler(model, optimizer_choice, lr, train_config, grid_search)
+
     # Create loss functions
     CE_Loss, DICE_Loss, Focal_loss = create_loss_functions(
         train_config, preprocessing_config, loss_combination, weight_range, path, device
     )
-    
+
     # Load image weights for sampling
     image_weights_tensor = torch.load(os.path.join(path, "image_weights.pth"), weights_only=True).float().to(device)
-    
+
     # Create data loaders
     train_loader, valid_loader = create_data_loaders(
         train_dataset, valid_dataset, train_config, preprocessing_config, train_ids, originals_fnames, image_weights_tensor, sampler_option
     )
-    
+
     # Create epoch runners
     train_epoch, valid_epoch = create_epoch_runners(
         model, CE_Loss, DICE_Loss, Focal_loss, lambdaa, preprocessing_config["segmentation"],
-        optimizer, scheduler, train_config, device
+        optimizer, scheduler, train_config, device, scheduler_type
     )
     
     # Prepare hyperparameters dict

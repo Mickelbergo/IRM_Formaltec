@@ -7,7 +7,7 @@ import torchmetrics
 from collections import Counter
 
 class Epoch:
-    def __init__(self, model, CE_Loss, DICE_Loss, Focal_loss, lambdaa, segmentation, stage_name, device=None, display_image=False, verbose=True, nr_classes=15, scheduler = None, f1_average='macro'):
+    def __init__(self, model, CE_Loss, DICE_Loss, Focal_loss, lambdaa, segmentation, stage_name, device=None, display_image=False, verbose=True, nr_classes=15, scheduler = None, f1_average='macro', scheduler_type='exponential'):
         self.model = model
         self.CE_Loss = CE_Loss
         self.DICE_Loss = DICE_Loss
@@ -22,6 +22,7 @@ class Epoch:
         self.nr_classes = nr_classes
         self.scheduler = scheduler
         self.f1_average = f1_average
+        self.scheduler_type = scheduler_type  # Track scheduler type
 
     def _to_device(self):
         self.model.to(self.device)
@@ -120,11 +121,17 @@ class Epoch:
                     'f1_score': np.mean(f1_scores)
                 })
                 steps+=1
-                if(steps > LR_start):
+
+                # Step scheduler per batch ONLY for CosineAnnealingWarmRestarts (after burn-in)
+                if self.scheduler_type == 'cosine_restarts' and steps > LR_start:
                     self.scheduler.step()
-                
+
                 if self.verbose:
                     iterator.set_postfix_str(f"LR: {logs['lr']:.7f}, Loss: {logs['loss']:.4f}, Acc: {logs['accuracy']:.4f}, IoU: {logs['iou_score']:.4f}, F1: {logs['f1_score']:.4f}")
+
+        # Step scheduler per EPOCH for ExponentialLR
+        if self.scheduler_type == 'exponential':
+            self.scheduler.step()
 
         JaccardIndex.reset()
         JaccardIndex_separate.reset()
@@ -134,13 +141,13 @@ class Epoch:
         print(f'Per-class IoU: {mean_per_class_iou}')
 
         #print(f'Class Distribution: {self.compute_class_distribution(predicted_classes)}')
-        
+
 
         return logs
 
 class TrainEpoch(Epoch):
-    def __init__(self, model, CE_Loss, DICE_Loss=None, Focal_loss = None, lambdaa = 1.0 ,segmentation="binary", optimizer=None, device=None, grad_clip_value=1.0, display_image=False, verbose=True, nr_classes=15, scheduler = None, mixed_prec = True, f1_average='macro'):
-        super().__init__(model, CE_Loss, DICE_Loss, Focal_loss, lambdaa, segmentation, stage_name='train', device=device, display_image=display_image, verbose=verbose, nr_classes=nr_classes, scheduler=scheduler, f1_average=f1_average)
+    def __init__(self, model, CE_Loss, DICE_Loss=None, Focal_loss = None, lambdaa = 1.0 ,segmentation="binary", optimizer=None, device=None, grad_clip_value=1.0, display_image=False, verbose=True, nr_classes=15, scheduler = None, mixed_prec = True, f1_average='macro', scheduler_type='exponential'):
+        super().__init__(model, CE_Loss, DICE_Loss, Focal_loss, lambdaa, segmentation, stage_name='train', device=device, display_image=display_image, verbose=verbose, nr_classes=nr_classes, scheduler=scheduler, f1_average=f1_average, scheduler_type=scheduler_type)
         self.optimizer = optimizer
         self.mixed_prec = mixed_prec
         self.grad_clip_value = grad_clip_value
@@ -197,8 +204,8 @@ class TrainEpoch(Epoch):
         return loss, y_pred
 
 class ValidEpoch(Epoch):
-    def __init__(self, model, CE_Loss, DICE_Loss=None, Focal_loss = None, lambdaa = 1.0, segmentation="binary", device=None, display_image=False, verbose=True, nr_classes=15, scheduler = None, mixed_prec = True, f1_average='macro'):
-        super().__init__(model, CE_Loss, DICE_Loss, Focal_loss, lambdaa ,segmentation, stage_name='valid', device=device, display_image=display_image, verbose=verbose, nr_classes=nr_classes, scheduler=scheduler, f1_average=f1_average)
+    def __init__(self, model, CE_Loss, DICE_Loss=None, Focal_loss = None, lambdaa = 1.0, segmentation="binary", device=None, display_image=False, verbose=True, nr_classes=15, scheduler = None, mixed_prec = True, f1_average='macro', scheduler_type='exponential'):
+        super().__init__(model, CE_Loss, DICE_Loss, Focal_loss, lambdaa ,segmentation, stage_name='valid', device=device, display_image=display_image, verbose=verbose, nr_classes=nr_classes, scheduler=scheduler, f1_average=f1_average, scheduler_type=scheduler_type)
         self.mixed_prec = mixed_prec
 
     def on_epoch_start(self):
