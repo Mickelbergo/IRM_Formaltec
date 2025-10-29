@@ -34,3 +34,9 @@ TODO.txt
 /generated_samples_diffusion/
 
 /generated_samples/
+
+#docs
+
+*.md
+!README.md
+!DEVELOPMENT.md

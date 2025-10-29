@@ -1,0 +1,74 @@
+# Core Deep Learning
+torch>=2.0.0
+torchvision>=0.15.0
+transformers>=4.30.0
+
+# Computer Vision
+opencv-python>=4.7.0
+Pillow>=9.5.0
+albumentations>=1.3.0
+segmentation-models-pytorch>=0.3.3
+
+# ML Utilities
+scikit-learn>=1.2.0
+scipy>=1.10.0
+numpy>=1.24.0
+
+# Data Processing
+pandas>=2.0.0
+tqdm>=4.65.0
+
+# Visualization
+matplotlib>=3.7.0
+seaborn>=0.12.0
+plotly>=5.14.0
+
+# Training & Monitoring
+tensorboard>=2.13.0
+wandb>=0.15.0
+
+# API & Web
+fastapi>=0.100.0
+uvicorn[standard]>=0.22.0
+python-multipart>=0.0.6
+pydantic>=2.0.0
+aiofiles>=23.1.0
+
+# LLM Integration
+openai>=0.27.0
+anthropic>=0.3.0
+langchain>=0.0.200
+tiktoken>=0.4.0
+
+# Database
+psycopg2-binary>=2.9.0
+sqlalchemy>=2.0.0
+redis>=4.6.0
+
+# Utilities
+python-dotenv>=1.0.0
+pyyaml>=6.0.0
+python-jose[cryptography]>=3.3.0
+passlib[bcrypt]>=1.7.4
+python-multipart>=0.0.6
+
+# Testing
+pytest>=7.3.0
+pytest-cov>=4.1.0
+pytest-asyncio>=0.21.0
+httpx>=0.24.0
+
+# Code Quality
+black>=23.3.0
+pylint>=2.17.0
+mypy>=1.3.0
+isort>=5.12.0
+
+# YOLO (for preprocessing)
+ultralytics>=8.0.0
+
+# Kornia (for advanced augmentations)
+kornia>=0.6.12
+
+# Streamlit (for dashboard)
+streamlit>=1.24.0

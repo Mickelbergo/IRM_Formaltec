@@ -16,8 +16,8 @@
             "unfreeze_layers_stage3": 16,
             "stage2_lr_factor": 0.3,
             "stage3_lr_factor": 0.05,
-            "dropout_rate": 0.5,
-            "stochastic_depth_rate": 0.1,
+            "dropout_rate": 0.4,
+            "stochastic_depth_rate": 0.2,
             "use_ema": true,
             "ema_decay": 0.9999,
             "early_stopping_patience": 15
@@ -30,7 +30,7 @@
     "training": {
         "batch_size": 8,
         "num_epochs": 100,
-        "weight_decay": 1e-5,
+        "weight_decay": 1e-4,
         "save_intermediate_models": true,
         "split_ratio": 0.8,
         "metrics": ["accuracy", "iou_score"],
@@ -60,7 +60,7 @@
         },
         "random_split": true,
         "progressive_training": true,
-        "grid_search_enabled": false,
+        "grid_search_enabled": true,
         "label_smoothing": 0.1,
         "non_grid_search": {
             "use_focal_loss": false,
@@ -73,15 +73,13 @@
 
         },
         "grid_search_parameters": {
-            "learning_rate": [0.00001, 0.0001,0.000005],
+            "learning_rate": [0.0002, 0.00001, 0.0001,0.000005],
             "optimizer": ["adamw"],
             "lr_scheduler_gamma": [0.999,  0.9999, 0.99],
             "use_focal_loss": [false],
             "loss_functions": ["dice"],
             "lambda_loss": [12, 20,10,15]
         }
-
-
 
     }
 }
