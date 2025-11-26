@@ -10,6 +10,7 @@ New_Code/Legacy/
 **/yolo*.pt
 **/YOLO/
 
+
 # Ignore Python cache and artifacts
 __pycache__/
 *.pyc
@@ -27,8 +28,17 @@ __pycache__/
 readme_old.txt
 TODO.txt
 
-#ignore diffusion_model
+#ignore diffusion_model directories and model files
 /diffusion_model/
+/diffusion_model_fast/
+/diffusion_model_enhanced/
+
+# Ignore all PyTorch model files
+*.pt
+*.pth
+
+# Ignore TensorFlow event files
+*.tfevents.*
 
 #ignore diffusion generated images
 /generated_samples_diffusion/

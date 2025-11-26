@@ -1,0 +1,7 @@
+{
+    "model_name": "vit",
+    "total_params": 1164047051,
+    "trainable_params": 27566283,
+    "frozen_params": 1136480768,
+    "trainable_percentage": 2.3681416465355576
+}
