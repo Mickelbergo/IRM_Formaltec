@@ -2,7 +2,26 @@ from PIL import Image
 import torch
 import os, sys
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
-from training.diffusion import MaskConditionalDDPMPipeline
+
+# ==============================================================================
+# NOTE: This script currently uses the original diffusion pipeline signature.
+# For the enhanced diffusion model (cross-attention, mask encoder), use:
+#   ../training/generate_synthetic.py
+#
+# To update this script for diffusion_enhanced.py, you'll need to:
+# 1. Load unet and mask_encoder separately from checkpoint
+# 2. Convert single-channel masks to one-hot encoded [B,C,H,W]
+# 3. Update pipeline instantiation
+# ==============================================================================
+
+# Fallback to original for now (this will work with original diffusion.py models)
+try:
+    from training.diffusion import MaskConditionalDDPMPipeline
+except ImportError:
+    print("WARNING: Could not import from training.diffusion")
+    print("For enhanced models, use: python Code/training/generate_synthetic.py")
+    raise
+
 from diffusers import DDPMScheduler
 from diffusers.utils import make_image_grid
 

@@ -1,12 +1,17 @@
+# ============================================================================
+# ARCHIVED: Basic unconditional generation (no mask conditioning)
+# Use generate_images.py or ../training/generate_synthetic.py instead.
+# ============================================================================
+
 import torch
 from diffusers import DDPMPipeline
 from diffusers.utils import make_image_grid
 import os
 
-def generate_images(model_dir="pretrained_diffusion_model", 
-                    batch_size=4, 
-                    num_inference_steps=100, 
-                    seed=42, 
+def generate_images(model_dir="pretrained_diffusion_model",
+                    batch_size=4,
+                    num_inference_steps=100,
+                    seed=42,
                     output_dir="generated"):
     """
     Loads a trained diffusion model and generates images.
@@ -27,8 +32,8 @@ def generate_images(model_dir="pretrained_diffusion_model",
 
     # Generate images
     print("Generating images...")
-    images = pipeline(batch_size=batch_size, 
-                      generator=generator, 
+    images = pipeline(batch_size=batch_size,
+                      generator=generator,
                       num_inference_steps=num_inference_steps).images
 
     # Save individual images

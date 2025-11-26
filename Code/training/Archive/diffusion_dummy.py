@@ -1,4 +1,9 @@
-import torch 
+# ============================================================================
+# ARCHIVED: Tutorial/example code (butterfly dataset)
+# Not wound-specific. Use diffusion_enhanced.py or diffusion_fast.py instead.
+# ============================================================================
+
+import torch
 import torch.nn as nn
 import torch.nn.functional as f
 
@@ -37,7 +42,7 @@ class TrainingConfig:
     save_image_epochs = 10
     save_model_epochs = 100
     mixed_precision = 'fp16'
-    output_dir = 'pretrained_diffusion_model' 
+    output_dir = 'pretrained_diffusion_model'
     seed = 42
     num_train_timesteps = 1000
 
@@ -118,7 +123,7 @@ def train_diffusion_model(config, model, noise_scheduler, optimizer, train_datal
             accelerator.log(logs, step = global_step)
 
             global_step += 1
-    
+
         if accelerator.is_main_process:
             pipeline = DDPMPipeline(unet=accelerator.unwrap_model(model), scheduler = noise_scheduler)
 
@@ -162,7 +167,7 @@ preprocess = transforms.Compose(
     ]
 )
 
-            
+
 if __name__ == '__main__':
 
     config = TrainingConfig()

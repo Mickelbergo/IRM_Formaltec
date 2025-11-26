@@ -1,3 +1,8 @@
+# ============================================================================
+# ARCHIVED: This file has been superseded by diffusion_enhanced.py
+# Kept for reference only. Use diffusion_enhanced.py or diffusion_fast.py instead.
+# ============================================================================
+
 # train_mask_conditional_diffusion.py
 # ------------------------------------------------------------
 # Mask-conditional DDPM with:
@@ -96,7 +101,7 @@ def infer_palette_map_and_classes(mask_dir, ignore_values=None, limit=None):
 def _maybe_infer_palette(cfg):
     if cfg.palette_map is None:
 
-        ignore = [] 
+        ignore = []
         palette_map, n_classes, vals = infer_palette_map_and_classes(cfg.mask_dir, ignore_values=ignore)
         cfg.palette_map = palette_map
         cfg.n_classes = n_classes
@@ -403,13 +408,13 @@ def train(cfg: TrainingConfig):
     )
 
     is_main = accelerator.is_main_process
-    
+
     _maybe_infer_palette(cfg)
 
     if is_main:
         print("Config:", asdict(cfg))
 
-    
+
     # Datasets / loaders
     train_dataset = WoundDataset(
         image_dir=cfg.image_dir,
@@ -592,7 +597,7 @@ if __name__ == "__main__":
     # config.n_classes = 4
 
     train(config)
-    
+
     # After training, to quickly preview the latest grid:
     latest = sorted(glob.glob(os.path.join(config.output_dir, "samples", "*.png")))
     if latest:
