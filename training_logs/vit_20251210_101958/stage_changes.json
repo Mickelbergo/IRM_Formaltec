@@ -1,0 +1,12 @@
+[
+    {
+        "epoch": 0,
+        "stage": "Stage 1 - Frozen Encoder",
+        "unfrozen_layers": 0
+    },
+    {
+        "epoch": 29,
+        "stage": "Stage 2 - Partial Unfreeze",
+        "unfrozen_layers": 8
+    }
+]

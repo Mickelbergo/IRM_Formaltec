@@ -1,0 +1,34 @@
+{
+    "run_name": "vit_20251210_174800",
+    "total_epochs": 39,
+    "best_valid_iou": 0.4375764720496677,
+    "best_valid_f1": 0.5334244420131048,
+    "final_train_iou": 0.5213730412500875,
+    "final_valid_iou": 0.41972464606875465,
+    "hyperparameters": {
+        "encoder": "vit",
+        "model_version": "v1.6",
+        "learning_rate": 0.0001,
+        "lambda": 10,
+        "weight_range": [
+            30,
+            60
+        ],
+        "batch_size": 8,
+        "num_epochs": 100,
+        "scheduler_type": "exponential",
+        "optimizer": "adamw",
+        "loss_functions": [
+            "dice"
+        ],
+        "segmentation_mode": "multiclass",
+        "num_classes": 11
+    },
+    "model_info": {
+        "model_name": "vit",
+        "total_params": 1164047051,
+        "trainable_params": 27566283,
+        "frozen_params": 1136480768,
+        "trainable_percentage": 2.3681416465355576
+    }
+}

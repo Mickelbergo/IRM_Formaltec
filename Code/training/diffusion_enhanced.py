@@ -516,19 +516,30 @@ class MaskConditionalDDPMPipeline:
 
         # Encode masks for cross-attention
         mask_embeds = self.mask_encoder(masks)  # [B, seq_len, embed_dim]
-        uncond_embeds = self.mask_encoder(torch.zeros_like(masks))  # Unconditional
+
+        # Check if CFG is actually being used
+        do_classifier_free_guidance = guidance_scale > 1.0
+
+        if do_classifier_free_guidance:
+            uncond_embeds = self.mask_encoder(torch.zeros_like(masks))  # Unconditional
 
         self.scheduler.set_timesteps(num_inference_steps, device=device)
 
         for t in self.scheduler.timesteps:
-            # Unconditional prediction
-            noise_pred_uncond = self.unet(x, t, encoder_hidden_states=uncond_embeds).sample
+            if do_classifier_free_guidance:
+                # OPTIMIZED: Batch conditional and unconditional predictions together
+                # This cuts inference time roughly in half compared to sequential calls
+                x_input = torch.cat([x, x])
+                embeds_input = torch.cat([uncond_embeds, mask_embeds])
 
-            # Conditional prediction
-            noise_pred_cond = self.unet(x, t, encoder_hidden_states=mask_embeds).sample
+                noise_pred = self.unet(x_input, t, encoder_hidden_states=embeds_input).sample
+                noise_pred_uncond, noise_pred_cond = noise_pred.chunk(2)
 
-            # CFG
-            noise_pred = noise_pred_uncond + guidance_scale * (noise_pred_cond - noise_pred_uncond)
+                # CFG
+                noise_pred = noise_pred_uncond + guidance_scale * (noise_pred_cond - noise_pred_uncond)
+            else:
+                # No CFG, single forward pass
+                noise_pred = self.unet(x, t, encoder_hidden_states=mask_embeds).sample
 
             # Scheduler step
             x = self.scheduler.step(noise_pred, t, x, generator=generator).prev_sample

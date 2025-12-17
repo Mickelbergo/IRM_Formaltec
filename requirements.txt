@@ -54,3 +54,8 @@ kornia>=0.6.12
 
 # Streamlit (for dashboard)
 streamlit>=1.24.0
+
+
+# Diffusion Models
+accelerate>=0.20.0
+diffusers>=0.21.0
